@@ -432,17 +432,16 @@ dt,
 
 .view-switcher {
   display: flex;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
   gap: 6px;
   margin-bottom: 14px;
-  overflow-x: auto;
-  scrollbar-width: thin;
+  overflow: visible;
 }
 
 .map-view-switcher {
   margin-top: 8px;
   margin-bottom: 0;
-  max-width: 320px;
+  max-width: none;
 }
 
 .view-button {
