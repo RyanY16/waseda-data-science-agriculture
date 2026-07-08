@@ -1,0 +1,115 @@
+{
+  "default_view": "satellite",
+  "overlay_bounds": [
+    139.23690851420307,
+    37.81551385542215,
+    139.48339450313688,
+    38.03352786543623
+  ],
+  "views": [
+    {
+      "id": "satellite",
+      "label": "Satellite",
+      "image": "/outputs/shibata_city_152064/views/satellite_rgb.png",
+      "overlay_image": "/outputs/shibata_city_152064/views/satellite_rgb_overlay.png",
+      "raster": "/outputs/shibata_city_152064/views/satellite_rgb_overlay.tif",
+      "web_image": "/outputs/shibata_city_152064/views/satellite_rgb_web_overlay.webp"
+    },
+    {
+      "id": "blue",
+      "label": "Blue",
+      "image": "/outputs/shibata_city_152064/views/blue.png",
+      "overlay_image": "/outputs/shibata_city_152064/views/blue_overlay.png",
+      "raster": "/outputs/shibata_city_152064/views/blue_overlay.tif",
+      "legend": {
+        "title": "B02 blue reflectance",
+        "units": "reflectance",
+        "min": 0.12799999948058802,
+        "mid": 0.16161416557040947,
+        "max": 0.1952283316602309,
+        "gradient": "linear-gradient(90deg, #f7fbff, #6baed6, #08306b)"
+      },
+      "web_image": "/outputs/shibata_city_152064/views/blue_web_overlay.webp"
+    },
+    {
+      "id": "green",
+      "label": "Green",
+      "image": "/outputs/shibata_city_152064/views/green.png",
+      "overlay_image": "/outputs/shibata_city_152064/views/green_overlay.png",
+      "raster": "/outputs/shibata_city_152064/views/green_overlay.tif",
+      "legend": {
+        "title": "B03 green reflectance",
+        "units": "reflectance",
+        "min": 0.15568840685454038,
+        "mid": 0.18977467982596524,
+        "max": 0.22386095279739013,
+        "gradient": "linear-gradient(90deg, #f7fcf5, #74c476, #00441b)"
+      },
+      "web_image": "/outputs/shibata_city_152064/views/green_web_overlay.webp"
+    },
+    {
+      "id": "red",
+      "label": "Red",
+      "image": "/outputs/shibata_city_152064/views/red.png",
+      "overlay_image": "/outputs/shibata_city_152064/views/red_overlay.png",
+      "raster": "/outputs/shibata_city_152064/views/red_overlay.tif",
+      "legend": {
+        "title": "B04 red reflectance",
+        "units": "reflectance",
+        "min": 0.1279066664139429,
+        "mid": 0.17634349926859136,
+        "max": 0.2247803321232398,
+        "gradient": "linear-gradient(90deg, #fff5f0, #fb6a4a, #67000d)"
+      },
+      "web_image": "/outputs/shibata_city_152064/views/red_web_overlay.webp"
+    },
+    {
+      "id": "nir",
+      "label": "NIR",
+      "image": "/outputs/shibata_city_152064/views/nir.png",
+      "overlay_image": "/outputs/shibata_city_152064/views/nir_overlay.png",
+      "raster": "/outputs/shibata_city_152064/views/nir_overlay.tif",
+      "legend": {
+        "title": "B08 near-infrared reflectance",
+        "units": "reflectance",
+        "min": 0.3254874268599918,
+        "mid": 0.4404596671804507,
+        "max": 0.5554319075009096,
+        "gradient": "linear-gradient(90deg, #fcfbfd, #9e9ac8, #3f007d)"
+      },
+      "web_image": "/outputs/shibata_city_152064/views/nir_web_overlay.webp"
+    },
+    {
+      "id": "ndvi",
+      "label": "NDVI",
+      "image": "/outputs/shibata_city_152064/views/ndvi.png",
+      "overlay_image": "/outputs/shibata_city_152064/views/ndvi_overlay.png",
+      "raster": "/outputs/shibata_city_152064/views/ndvi_overlay.tif",
+      "legend": {
+        "title": "NDVI",
+        "units": "index",
+        "min": -0.2,
+        "mid": 0.35,
+        "max": 0.9,
+        "gradient": "linear-gradient(90deg, #d73027, #fee08b, #1a9850)"
+      },
+      "web_image": "/outputs/shibata_city_152064/views/ndvi_web_overlay.webp"
+    },
+    {
+      "id": "yield",
+      "label": "Yield",
+      "image": "/outputs/shibata_city_152064/views/yield.png",
+      "overlay_image": "/outputs/shibata_city_152064/views/yield_overlay.png",
+      "raster": "/outputs/shibata_city_152064/views/yield_overlay.tif",
+      "legend": {
+        "title": "Expected yield",
+        "units": "t/ha",
+        "min": -0.5653172210334839,
+        "mid": 3.1727723672327612,
+        "max": 6.910861955499007,
+        "gradient": "linear-gradient(90deg, #d73027, #fee08b, #1a9850)"
+      },
+      "web_image": "/outputs/shibata_city_152064/views/yield_web_overlay.webp"
+    }
+  ]
+}

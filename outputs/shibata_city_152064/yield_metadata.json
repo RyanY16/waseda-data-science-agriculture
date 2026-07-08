@@ -1,0 +1,33 @@
+{
+  "region_id": "shibata_city_152064",
+  "region_label": "Shibata City",
+  "local_government_cd": "152064",
+  "bbox": [
+    139.242025538,
+    37.815575633,
+    139.478921888,
+    38.033527525
+  ],
+  "date_range": "2024-06-01/2024-10-15",
+  "sentinel_scene_ids": [
+    "S2A_MSIL2A_20240819T012701_R074_T54SUH_20240819T045949"
+  ],
+  "sentinel_scene_id": "S2A_MSIL2A_20240819T012701_R074_T54SUH_20240819T045949",
+  "sentinel_datetime": "2024-08-19T01:27:01.024000+00:00",
+  "sentinel_cloud_cover_pct": 16.339412,
+  "municipality_mean_ndvi_peak_proxy": 0.47087275981903076,
+  "formula": {
+    "NDVI": "(B08 - B04) / (B08 + B04)",
+    "SAVI": "((B08 - B04) / (B08 + B04 + 0.5)) * 1.5",
+    "LAI": "-ln((0.69 - SAVI) / 0.59) / 0.91",
+    "Yield": "-3.110 + 1.684 * LAI + 12.458 * NDVI"
+  },
+  "label": "Prototype yield estimate",
+  "units": "t/ha",
+  "notes": [
+    "Prototype estimate from Sentinel-2 B04/B08 using a fitted formula chain.",
+    "Peak scene chosen as the highest municipality-mean NDVI scene within the configured date range.",
+    "This is not Japan-calibrated field truth and should be treated as yield potential, not actual yield.",
+    "SAVI was capped at 0.689 for LAI domain stability when needed."
+  ]
+}

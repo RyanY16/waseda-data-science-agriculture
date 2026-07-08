@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Riceify | Shibata City</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+      crossorigin=""
+    />
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css"
+      crossorigin="anonymous"
+    />
+    <link rel="stylesheet" href="/site/styles.css?v=20260708-full-page" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <div>
+          <div class="eyebrow">Riceify</div>
+          <h1>Shibata City Rice Field Monitor</h1>
+          <p class="tagline">Official municipality parcels, live map behavior, Sentinel-style band context.</p>
+        </div>
+        <div class="scene-meta">
+          <div class="scene-chip">
+            <span class="scene-label">Scene</span>
+            <strong id="scene-id">Loading...</strong>
+          </div>
+          <div class="scene-chip">
+            <span class="scene-label">Date</span>
+            <strong id="scene-date">Loading...</strong>
+          </div>
+          <div class="scene-chip">
+            <span class="scene-label">Cloud</span>
+            <strong id="scene-cloud">Loading...</strong>
+          </div>
+        </div>
+      </header>
+
+      <main class="layout">
+        <section class="map-stage">
+          <div class="stage-toolbar">
+            <div class="stage-title">
+              <h2>Prototype yield estimate map</h2>
+              <p>Switch raster views, then enable field info to inspect parcel-level metrics.</p>
+            </div>
+            <div class="map-view-panel">
+              <span class="stat-label">Map view</span>
+              <div id="map-view-switcher" class="view-switcher map-view-switcher" aria-label="Map view switcher"></div>
+            </div>
+            <label class="field-info-toggle">
+              <input id="field-info-toggle" type="checkbox" />
+              <span>Field info overlay</span>
+            </label>
+            <div class="stage-stats">
+              <div>
+                <span class="stat-label">Fields</span>
+                <strong id="field-count">...</strong>
+              </div>
+              <div>
+                <span class="stat-label">Median yield</span>
+                <strong id="median-yield">...</strong>
+              </div>
+              <div>
+                <span class="stat-label">High yield</span>
+                <strong id="high-yield">...</strong>
+              </div>
+            </div>
+          </div>
+          <div id="map" class="map-frame" aria-label="Rice field parcel map"></div>
+          <div class="map-note">
+            Prototype yield potential layer from the NDVI/SAVI/LAI formula chain. This is not Japan-calibrated field truth.
+          </div>
+        </section>
+
+        <section class="methodology-panel">
+          <div class="methodology-header">
+            <div>
+              <div class="eyebrow">Methodology</div>
+              <h2>How the prototype yield layer is generated</h2>
+            </div>
+            <p class="methodology-copy">
+              This layer is meant for rapid field comparison and demo use. It uses real parcels and real Sentinel-2 reflectance, but the final yield equation is still a prototype transfer and should be treated as yield potential, not calibrated harvest truth.
+            </p>
+          </div>
+
+          <div class="methodology-reference">
+            <p>
+              The calculation procedure is loosely adapted from the Sentinel-2 rice monitoring workflow described in
+              <a href="https://www.sciencedirect.com/science/article/pii/S1110982320301666" target="_blank" rel="noreferrer">
+                Ali et al. (2021), Integrated method for rice cultivation monitoring using Sentinel-2 data and Leaf Area Index
+              </a>.
+              That paper combines seasonal Sentinel-2 observations with LAI-based yield estimation. Riceify keeps the same empirical logic around NDVI and LAI, but replaces field-survey segmentation with official MAFF parcel geometry and uses a peak-scene proxy for the current municipality-scale prototype.
+            </p>
+          </div>
+
+          <div class="methodology-grid">
+            <section class="method-card">
+              <h3>1. Field geometry</h3>
+              <p>
+                Every parcel on the map comes from the MAFF Fude polygon dataset. The current municipality is official Shibata City (`152064`), and only parcels labeled `rice_field` are included.
+              </p>
+            </section>
+
+            <section class="method-card">
+              <h3>2. Peak-scene selection</h3>
+              <p>
+                Riceify searches low-cloud Sentinel-2 Level-2A scenes across the season and chooses a peak-greenness proxy scene using municipality-wide mean NDVI. That follows the paper's general idea of using in-season vegetation behavior rather than a random acquisition date.
+              </p>
+            </section>
+
+            <section class="method-card">
+              <h3>3. Band inputs</h3>
+              <p>
+                The prototype yield formula itself uses <strong>B04</strong> and <strong>B08</strong>, while the view switcher exposes additional bands from the same Sentinel-2 scene for visual inspection.
+              </p>
+              <div class="band-input-list">
+                <div><strong>B02</strong>: blue band, useful for water and visible-color inspection.</div>
+                <div><strong>B03</strong>: green band, useful for vegetation tone and visible-color inspection.</div>
+                <div><strong>B04</strong>: red band, absorbed by healthy vegetation and used directly in NDVI and SAVI.</div>
+                <div><strong>B08</strong>: near-infrared band, reflected by healthy vegetation and used directly in NDVI and SAVI.</div>
+              </div>
+              <p class="formula-note">
+                For each field, Riceify computes mean reflectance from the selected scene mosaic inside the parcel footprint before applying the vegetation-index and yield equations.
+              </p>
+            </section>
+
+            <section class="method-card">
+              <h3>4. Formula chain</h3>
+              <div class="formula-stack latex-stack">
+                <div class="latex-block">$$NDVI = \frac{B08 - B04}{B08 + B04}$$</div>
+                <div class="latex-block">$$SAVI = \frac{B08 - B04}{B08 + B04 + 0.5} \times 1.5$$</div>
+                <div class="latex-block">$$LAI = -\frac{\ln\left(\frac{0.69 - SAVI}{0.59}\right)}{0.91}$$</div>
+                <div class="latex-block">$$Yield = -3.110 + 1.684 \times LAI + 12.458 \times NDVI$$</div>
+              </div>
+              <p class="formula-note">
+                In the cited literature, NDVI and LAI are used together as the strongest pre-harvest empirical predictors. Riceify applies that same calculation pattern as a prototype yield-potential layer.
+              </p>
+            </section>
+
+            <section class="method-card">
+              <h3>5. Output</h3>
+              <p>
+                The final value shown on the map is labeled <strong>prototype yield estimate</strong> in `t/ha`. It is useful for ranking fields and spotting spatial patterns, but it still needs Japan-specific calibration before being treated as an operational yield forecast.
+              </p>
+            </section>
+
+            <section class="method-card method-card-accent">
+              <h3>Current limitations</h3>
+              <p>
+                This version does not yet use field-level harvest labels, weather, or Sentinel-1 SAR. Some small parcels also fall outside valid satellite coverage in the selected scene, so not every field gets a computed estimate.
+              </p>
+            </section>
+          </div>
+        </section>
+
+        <aside class="sidebar">
+          <section class="panel selection-panel">
+            <div class="panel-header">
+              <h3>Field details</h3>
+              <span class="panel-kicker">Parcel selection</span>
+            </div>
+            <div id="selection-empty" class="empty-state">
+              Enable field info and select a parcel on the map to inspect its band values, vegetation metrics, and expected yield.
+            </div>
+            <dl id="selection-details" class="detail-list hidden">
+              <div>
+                <dt>Expected yield</dt>
+                <dd id="detail-yield"></dd>
+              </div>
+              <div>
+                <dt>B02 (Blue)</dt>
+                <dd id="detail-b02"></dd>
+              </div>
+              <div>
+                <dt>B03 (Green)</dt>
+                <dd id="detail-b03"></dd>
+              </div>
+              <div>
+                <dt>B04 (Red)</dt>
+                <dd id="detail-b04"></dd>
+              </div>
+              <div>
+                <dt>B08 (NIR)</dt>
+                <dd id="detail-b08"></dd>
+              </div>
+              <div>
+                <dt>NDVI</dt>
+                <dd id="detail-ndvi"></dd>
+              </div>
+              <div>
+                <dt>SAVI</dt>
+                <dd id="detail-savi"></dd>
+              </div>
+              <div>
+                <dt>LAI</dt>
+                <dd id="detail-lai"></dd>
+              </div>
+              <div>
+                <dt>Valid pixels</dt>
+                <dd id="detail-pixels"></dd>
+              </div>
+              <div>
+                <dt>Field ID</dt>
+                <dd id="detail-id"></dd>
+              </div>
+              <div>
+                <dt>Area</dt>
+                <dd id="detail-area"></dd>
+              </div>
+              <div>
+                <dt>Centroid</dt>
+                <dd id="detail-centroid"></dd>
+              </div>
+              <div>
+                <dt>Municipality</dt>
+                <dd id="detail-muni"></dd>
+              </div>
+            </dl>
+          </section>
+
+          <section class="panel">
+            <div class="panel-header">
+              <h3>Current scene view</h3>
+              <span class="panel-kicker">Municipality-scale preview</span>
+            </div>
+            <p class="panel-copy">
+              The preview follows the same selected map view shown in the main yield map. These are downsampled municipality views for reading spatial patterns, not parcel-resolution extraction.
+            </p>
+            <div class="band-preview-wrap">
+              <img
+                id="band-preview"
+                src="/outputs/shibata_city_152064/views/satellite_rgb.png"
+                alt="Municipality image view"
+              />
+            </div>
+          </section>
+        </aside>
+      </main>
+    </div>
+
+    <script
+      src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+      integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+      crossorigin=""
+    ></script>
+    <script
+      defer
+      src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"
+      crossorigin="anonymous"
+    ></script>
+    <script
+      defer
+      src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"
+      crossorigin="anonymous"
+      onload="renderMathInElement(document.body, {delimiters:[{left:'$$', right:'$$', display:true}]});"
+    ></script>
+    <script src="/site/app.js?v=20260708-yield-polygons"></script>
+  </body>
+</html>

@@ -1,0 +1,12 @@
+pandas
+pyarrow
+duckdb
+shapely
+pyproj
+rasterio
+pystac-client
+planetary-computer
+numpy
+matplotlib
+requests
+folium
