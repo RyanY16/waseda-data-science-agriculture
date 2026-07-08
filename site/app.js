@@ -29,6 +29,8 @@ const dom = {
   detailMuni: document.getElementById("detail-muni"),
   bandPreview: document.getElementById("band-preview"),
   mapViewSwitcher: document.getElementById("map-view-switcher"),
+  sidebar: document.querySelector(".sidebar"),
+  methodologyPanel: document.querySelector(".methodology-panel"),
 };
 
 const defaultStyle = {
@@ -389,6 +391,12 @@ function renderViewButtons(config) {
   setActiveView(config, config.default_view);
 }
 
+function placeMethodologyPanel() {
+  if (dom.sidebar && dom.methodologyPanel && dom.methodologyPanel.parentElement !== dom.sidebar) {
+    dom.sidebar.appendChild(dom.methodologyPanel);
+  }
+}
+
 function preloadViewImages(config) {
   config.views.forEach((view) => {
     if (view.id === "yield") return;
@@ -463,6 +471,7 @@ dom.fieldInfoToggle.addEventListener("change", () => {
 
 async function init() {
   try {
+    placeMethodologyPanel();
     const [meta, geojson] = await Promise.all([
       fetch(metadataUrl).then((response) => response.json()),
       fetch(geojsonUrl).then((response) => response.json()),
