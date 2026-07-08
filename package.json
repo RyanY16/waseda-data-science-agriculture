@@ -1,0 +1,9 @@
+{
+  "name": "riceify",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "build": "rm -rf public && mkdir -p public && cp -R site public/site && cp -R outputs public/outputs && cp site/index.html public/index.html",
+    "start": "python3 -m http.server 8010"
+  }
+}
