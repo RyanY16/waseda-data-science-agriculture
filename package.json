@@ -1,9 +1,10 @@
 {
   "name": "riceify",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "scripts": {
-    "build": "rm -rf public && mkdir -p public && cp -R site public/site && cp -R outputs public/outputs && cp site/index.html public/index.html",
-    "start": "python3 -m http.server 8010"
+    "build": "node scripts/build-site.cjs",
+    "start": "python3 -m http.server 8010 --bind 127.0.0.1 --directory site",
+    "test": "node --check site/app.js && node --check site/model.js && node scripts/check-dashboard.cjs && node scripts/check-harvest.cjs"
   }
 }

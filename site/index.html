@@ -1,270 +1,29 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Riceify | Shibata City</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap"
-      rel="stylesheet"
-    />
-    <link
-      rel="stylesheet"
-      href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
-      crossorigin=""
-    />
-    <link
-      rel="stylesheet"
-      href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css"
-      crossorigin="anonymous"
-    />
-    <link rel="stylesheet" href="/site/styles.css?v=20260708-visible-map-buttons" />
-  </head>
-  <body>
-    <div class="app-shell">
-      <header class="topbar">
-        <div>
-          <div class="eyebrow">Riceify</div>
-          <h1>Shibata City Rice Field Monitor</h1>
-          <p class="tagline">Official municipality parcels, live map behavior, Sentinel-style band context.</p>
-        </div>
-        <div class="scene-meta">
-          <div class="scene-chip">
-            <span class="scene-label">Scene</span>
-            <strong id="scene-id">Loading...</strong>
-          </div>
-          <div class="scene-chip">
-            <span class="scene-label">Date</span>
-            <strong id="scene-date">Loading...</strong>
-          </div>
-          <div class="scene-chip">
-            <span class="scene-label">Cloud</span>
-            <strong id="scene-cloud">Loading...</strong>
-          </div>
-        </div>
-      </header>
-
-      <main class="layout">
-        <section class="map-stage">
-          <div class="stage-toolbar">
-            <div class="stage-title">
-              <h2>Prototype yield estimate map</h2>
-              <p>Switch raster views, then enable field info to inspect parcel-level metrics.</p>
-            </div>
-            <div class="map-view-panel">
-              <span class="stat-label">Map view</span>
-              <div id="map-view-switcher" class="view-switcher map-view-switcher" aria-label="Map view switcher"></div>
-            </div>
-            <label class="field-info-toggle">
-              <input id="field-info-toggle" type="checkbox" />
-              <span>Field info overlay</span>
-            </label>
-            <div class="stage-stats">
-              <div>
-                <span class="stat-label">Fields</span>
-                <strong id="field-count">...</strong>
-              </div>
-              <div>
-                <span class="stat-label">Median yield</span>
-                <strong id="median-yield">...</strong>
-              </div>
-              <div>
-                <span class="stat-label">High yield</span>
-                <strong id="high-yield">...</strong>
-              </div>
-            </div>
-          </div>
-          <div id="map" class="map-frame" aria-label="Rice field parcel map"></div>
-          <div class="map-note">
-            Prototype yield potential layer from the NDVI/SAVI/LAI formula chain. This is not Japan-calibrated field truth.
-          </div>
-        </section>
-
-        <section class="methodology-panel">
-          <div class="methodology-header">
-            <div>
-              <div class="eyebrow">Methodology</div>
-              <h2>How the prototype yield layer is generated</h2>
-            </div>
-            <p class="methodology-copy">
-              This layer is meant for rapid field comparison and demo use. It uses real parcels and real Sentinel-2 reflectance, but the final yield equation is still a prototype transfer and should be treated as yield potential, not calibrated harvest truth.
-            </p>
-          </div>
-
-          <div class="methodology-reference">
-            <p>
-              The calculation procedure is loosely adapted from the Sentinel-2 rice monitoring workflow described in
-              <a href="https://www.sciencedirect.com/science/article/pii/S1110982320301666" target="_blank" rel="noreferrer">
-                Ali et al. (2021), Integrated method for rice cultivation monitoring using Sentinel-2 data and Leaf Area Index
-              </a>.
-              That paper combines seasonal Sentinel-2 observations with LAI-based yield estimation. Riceify keeps the same empirical logic around NDVI and LAI, but replaces field-survey segmentation with official MAFF parcel geometry and uses a peak-scene proxy for the current municipality-scale prototype.
-            </p>
-          </div>
-
-          <div class="methodology-grid">
-            <section class="method-card">
-              <h3>1. Field geometry</h3>
-              <p>
-                Every parcel on the map comes from the MAFF Fude polygon dataset. The current municipality is official Shibata City (`152064`), and only parcels labeled `rice_field` are included.
-              </p>
-            </section>
-
-            <section class="method-card">
-              <h3>2. Peak-scene selection</h3>
-              <p>
-                Riceify searches low-cloud Sentinel-2 Level-2A scenes across the season and chooses a peak-greenness proxy scene using municipality-wide mean NDVI. That follows the paper's general idea of using in-season vegetation behavior rather than a random acquisition date.
-              </p>
-            </section>
-
-            <section class="method-card">
-              <h3>3. Band inputs</h3>
-              <p>
-                The prototype yield formula itself uses <strong>B04</strong> and <strong>B08</strong>, while the view switcher exposes additional bands from the same Sentinel-2 scene for visual inspection.
-              </p>
-              <div class="band-input-list">
-                <div><strong>B02</strong>: blue band, useful for water and visible-color inspection.</div>
-                <div><strong>B03</strong>: green band, useful for vegetation tone and visible-color inspection.</div>
-                <div><strong>B04</strong>: red band, absorbed by healthy vegetation and used directly in NDVI and SAVI.</div>
-                <div><strong>B08</strong>: near-infrared band, reflected by healthy vegetation and used directly in NDVI and SAVI.</div>
-              </div>
-              <p class="formula-note">
-                For each field, Riceify computes mean reflectance from the selected scene mosaic inside the parcel footprint before applying the vegetation-index and yield equations.
-              </p>
-            </section>
-
-            <section class="method-card">
-              <h3>4. Formula chain</h3>
-              <div class="formula-stack latex-stack">
-                <div class="latex-block">$$NDVI = \frac{B08 - B04}{B08 + B04}$$</div>
-                <div class="latex-block">$$SAVI = \frac{B08 - B04}{B08 + B04 + 0.5} \times 1.5$$</div>
-                <div class="latex-block">$$LAI = -\frac{\ln\left(\frac{0.69 - SAVI}{0.59}\right)}{0.91}$$</div>
-                <div class="latex-block">$$Yield = -3.110 + 1.684 \times LAI + 12.458 \times NDVI$$</div>
-              </div>
-              <p class="formula-note">
-                In the cited literature, NDVI and LAI are used together as the strongest pre-harvest empirical predictors. Riceify applies that same calculation pattern as a prototype yield-potential layer.
-              </p>
-            </section>
-
-            <section class="method-card">
-              <h3>5. Output</h3>
-              <p>
-                The final value shown on the map is labeled <strong>prototype yield estimate</strong> in `t/ha`. It is useful for ranking fields and spotting spatial patterns, but it still needs Japan-specific calibration before being treated as an operational yield forecast.
-              </p>
-            </section>
-
-            <section class="method-card method-card-accent">
-              <h3>Current limitations</h3>
-              <p>
-                This version does not yet use field-level harvest labels, weather, or Sentinel-1 SAR. Some small parcels also fall outside valid satellite coverage in the selected scene, so not every field gets a computed estimate.
-              </p>
-            </section>
-          </div>
-        </section>
-
-        <aside class="sidebar">
-          <section class="panel selection-panel">
-            <div class="panel-header">
-              <h3>Field details</h3>
-              <span class="panel-kicker">Parcel selection</span>
-            </div>
-            <div id="selection-empty" class="empty-state">
-              Enable field info and select a parcel on the map to inspect its band values, vegetation metrics, and expected yield.
-            </div>
-            <dl id="selection-details" class="detail-list hidden">
-              <div>
-                <dt>Expected yield</dt>
-                <dd id="detail-yield"></dd>
-              </div>
-              <div>
-                <dt>B02 (Blue)</dt>
-                <dd id="detail-b02"></dd>
-              </div>
-              <div>
-                <dt>B03 (Green)</dt>
-                <dd id="detail-b03"></dd>
-              </div>
-              <div>
-                <dt>B04 (Red)</dt>
-                <dd id="detail-b04"></dd>
-              </div>
-              <div>
-                <dt>B08 (NIR)</dt>
-                <dd id="detail-b08"></dd>
-              </div>
-              <div>
-                <dt>NDVI</dt>
-                <dd id="detail-ndvi"></dd>
-              </div>
-              <div>
-                <dt>SAVI</dt>
-                <dd id="detail-savi"></dd>
-              </div>
-              <div>
-                <dt>LAI</dt>
-                <dd id="detail-lai"></dd>
-              </div>
-              <div>
-                <dt>Valid pixels</dt>
-                <dd id="detail-pixels"></dd>
-              </div>
-              <div>
-                <dt>Field ID</dt>
-                <dd id="detail-id"></dd>
-              </div>
-              <div>
-                <dt>Area</dt>
-                <dd id="detail-area"></dd>
-              </div>
-              <div>
-                <dt>Centroid</dt>
-                <dd id="detail-centroid"></dd>
-              </div>
-              <div>
-                <dt>Municipality</dt>
-                <dd id="detail-muni"></dd>
-              </div>
-            </dl>
-          </section>
-
-          <section class="panel">
-            <div class="panel-header">
-              <h3>Current scene view</h3>
-              <span class="panel-kicker">Municipality-scale preview</span>
-            </div>
-            <p class="panel-copy">
-              The preview follows the same selected map view shown in the main yield map. These are downsampled municipality views for reading spatial patterns, not parcel-resolution extraction.
-            </p>
-            <div class="band-preview-wrap">
-              <img
-                id="band-preview"
-                src="/outputs/shibata_city_152064/views/satellite_rgb.png"
-                alt="Municipality image view"
-              />
-            </div>
-          </section>
-        </aside>
-      </main>
-    </div>
-
-    <script
-      src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
-      integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
-      crossorigin=""
-    ></script>
-    <script
-      defer
-      src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"
-      crossorigin="anonymous"
-    ></script>
-    <script
-      defer
-      src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"
-      crossorigin="anonymous"
-      onload="renderMathInElement(document.body, {delimiters:[{left:'$$', right:'$$', display:true}]});"
-    ></script>
-    <script src="/site/app.js?v=20260708-methodology-sidebar"></script>
-  </body>
-</html>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="description" content="Explore real Sentinel-1 flood predictions and MAFF-derived paddy parcels in Koriyama, Japan. Compare transparent rice production-loss scenarios."><title>Rice Flood Observatory · Koriyama</title><link rel="stylesheet" href="vendor/leaflet.css"><link rel="stylesheet" href="styles.css?v=farmer2"><script defer src="vendor/leaflet.js"></script><script defer src="model.js?v=farmer2"></script><script defer src="app.js?v=farmer2"></script></head>
+<body>
+<header class="topbar"><a class="brand" href="#"><span class="brand-icon" aria-hidden="true">稲</span><span>Rice Flood Observatory<small>JAPAN · RESEARCH EXPLORER</small></span></a><div class="top-links"><span class="event-pill"><i></i> Historical event</span><button class="text-button" id="sources-open">Data & methodology ↗</button></div></header>
+<main>
+<div class="page-heading"><div><p class="eyebrow">KORIYAMA, FUKUSHIMA / TYPHOON HAGIBIS</p><h1>A closer look at the flood.</h1><p class="intro">Explore paddy fields, satellite-detected flooding, and what it could mean for the harvest.</p></div><div class="event-date"><span>POST-EVENT RADAR</span><strong>13 Oct 2019</strong><small>05:42 JST · Sentinel-1</small></div></div>
+<div class="evidence-strip"><span><i class="dot green"></i> Real radar & field geometry</span><span>2019 imagery · 2021 paddy boundaries</span><span class="assumption"><i class="dot amber"></i> Production loss is a scenario</span></div>
+<section class="view-summary" aria-live="polite"><div><p class="eyebrow" id="view-evidence"></p><h2 id="view-title"></h2><p id="view-description"></p></div><div class="availability"><span id="water-state"></span><span id="crop-state"></span></div></section>
+<section class="workspace">
+<div class="map-panel"><div class="panel-top"><div><h2 id="map-title">The field map</h2><p id="map-instructions">Hover to inspect · click to keep a field selected</p></div><button class="small-button" id="fit-map" aria-label="Show all mapped fields">⌖ Reset view</button></div>
+<div class="map-controls"><label class="view-picker" for="view-select">Map view<select id="view-select" aria-label="Map view"><option value="before">1 · Before the flood</option><option value="flood">2 · Flood-affected area</option><option value="impact">3 · Rice production after flood</option></select></label><label id="flood-layer-label" class="view-picker" for="flood-layer" hidden>Flood layer<select id="flood-layer" aria-label="Flood information layer"><option value="depth">GSI estimated water depth</option><option value="footprint">Our detected flood footprint</option></select></label><label id="impact-metric-label" class="view-picker" for="impact-metric" hidden>Show<select id="impact-metric" aria-label="Rice impact metric"><option value="remaining">Remaining standing rice · t/ha</option><option value="difference">Reduction from before · t/ha</option><option value="lost">Production lost · tonnes</option></select></label><select id="status-filter" aria-label="Filter fields"><option value="all">All paddy fields</option><option value="flooded">Flood detected</option><option value="clear">No flood detected</option><option value="unknown">Unknown / no samples</option></select><select id="background" aria-label="Map background"><option value="aerial">GSI aerial imagery</option><option value="map">GSI schematic map</option><option value="radar" selected>Event radar · selected date</option></select></div>
+<div class="alignment-controls"><label for="field-opacity"><span id="field-opacity-label">Field fill</span> <input id="field-opacity" type="range" min="0" max="85" step="5" value="30"> <output id="opacity-value">30%</output></label><span id="map-lock-note">Study area locked · 0% fill shows boundaries</span></div>
+<div id="map" aria-label="Interactive Koriyama paddy field map"><div id="depth-map-key" hidden><span>GSI depth estimate</span><img src="data/gsi_depth_legend.png" alt="GSI depth scale: 0, 2, 4, 6 and 6.5 metres or more"></div><div class="map-loading" id="map-loading">Loading real field boundaries…</div></div>
+<div class="map-footer"><div id="legend"><span class="legend-square" id="legend-first" style="background:#c9dac0"></span> <span id="legend-zero">No flood detected</span> <span class="legend-ramp" id="legend-ramp"></span> <span id="legend-label">More detected flood overlap</span><span class="legend-square unknown"></span> Unknown</div><div id="depth-legend" class="depth-legend" hidden><div><strong>Estimated flood depth · metres</strong><p>Original GSI scale: 0 · 2 · 4 · 6 · 6.5+ m</p><p><i class="unknown-key"></i> Grey: no published depth information</p></div></div><span id="visible-count">— fields shown</span></div>
+<p class="map-note" id="alignment-note">GSI aerial mosaic: capture dates vary; not an October 2019 flood image. Compare parcel edges with the photograph using field opacity.</p><p class="map-note" id="crop-map-note">Paddy classification is a land-use proxy, not confirmation of standing rice in 2019. “No flood detected” does not establish crop health.</p></div>
+<aside class="sidebar"><section class="farmer-summary" aria-label="Farmer harvest summary" aria-live="polite"><div class="section-kicker">HARVEST OUTLOOK · STUDY-WIDE</div><h2>What could the flood cost?</h2><span class="summary-badge">Scenario estimate · not observed harvest</span><dl class="summary-facts"><div><dt>Total mapped paddy area</dt><dd id="farm-area">—</dd></div><div><dt>Harvest without flood damage</dt><dd id="farm-before">—</dd></div><div><dt>Flood-affected paddy area</dt><dd id="farm-flood">—</dd></div></dl><p class="summary-subnote" id="farm-flood-note"></p><div class="summary-result"><span>Harvest after flood damage</span><strong id="farm-after">—</strong><div><b id="farm-change">—</b><span id="farm-loss">—</span></div></div><p class="summary-subnote" id="farm-coverage"></p><details class="summary-details"><summary>What goes into this estimate?</summary><p id="farm-assumptions"></p><p id="farm-standing"></p><p>Season totals include the assumed already-harvested share, protected from standing-crop loss. No crop-presence or actual harvest data are available. Affected area is detected inundation, not destroyed crop area.</p><p>The GSI depth colours in view 2 do not drive this estimate. Crop damage still uses the selected depth/duration scenario; field boundaries and flood classification are approximate.</p></details><button class="text-button" id="adjust-harvest">Adjust harvest assumptions →</button></section>
+<section class="scenario-panel" id="scenario-panel"><div class="section-kicker"><span class="dot amber"></span> EXPLORE A SCENARIO</div><h2 id="assumptions-title">Harvest assumptions</h2><p class="muted" id="assumptions-description">Illustrative crop conditions; not measured.</p><div class="scenario-buttons" id="scenario-buttons"><button data-scenario="0">Shallow / short<small>~0.3 m · 4 days</small></button><button data-scenario="1" class="active">Middle<small>~1.1 m · 8 days</small></button><button data-scenario="2">Deep / long<small>~1.9 m · 12 days</small></button></div>
+<label class="slider-label" for="harvest">Rice still unharvested <strong id="harvest-value">25%</strong></label><input id="harvest" type="range" min="0" max="100" step="5" value="25"><div class="range-labels"><span>Already harvested</span><span>All standing</span></div>
+<label class="slider-label" for="yield">Normal yield <strong id="yield-value">5.0 t/ha</strong></label><input id="yield" type="range" min="2" max="8" step="0.1" value="5"><div class="range-labels"><span>2 t/ha</span><span>8 t/ha</span></div>
+<div class="damage-note" id="damage-note"><strong id="damage-label">47.87%</strong><span>Conditional yield loss for exposed, unharvested rice in this scenario.</span></div><p class="assumption-note" id="crop-assumptions-note">Maturity-stage damage comes from published Thailand/Myanmar research. Depth, duration, yield and harvest status are assumed; Japanese loss accuracy is unvalidated.</p><button id="reset-assumptions" class="text-button">↺ Reset assumptions</button></section>
+<section class="field-panel" id="depth-info" hidden><div class="section-kicker">GSI · EVENT DEPTH ESTIMATE</div><h2>How deep was the flooding?</h2><p class="muted">Light to dark blue shows shallower to deeper estimated water, using the official GSI colour scale. No rice-field outlines are shown.</p><div class="field-rows"><div class="field-row"><span>Published scale</span><strong>0–6.5+ m</strong></div><div class="field-row"><span>Aerial photography</span><strong>13 Oct 2019</strong></div><div class="field-row"><span>Information collected through</span><strong>14 Oct · 18:00 JST</strong></div><div class="field-row"><span>Flood duration</span><strong>Unavailable</strong></div><div class="field-row"><span>Grey areas</span><strong>Depth unknown</strong></div></div><p class="assumption-note">Official estimates from event information, aerial photographs and terrain. They are not measurements at every location or a guaranteed maximum-depth map. Missing colours do not mean zero depth.</p><p class="assumption-note">The depth map has different timing from our 13 October 05:42 JST radar image. The two layers are alternative sources, not an accuracy comparison.</p><p class="sample-warning">View 3 still uses assumed depth scenarios. This colour map has not been converted into numeric field depths or used to recalculate rice losses.</p><a class="text-button" href="https://www.gsi.go.jp/BOUSAI/R1.taihuu19gou.html" target="_blank" rel="noreferrer">Official GSI event maps ↗</a><br><a class="text-button" href="data/gsi_depth.json" download>Depth-layer metadata ↓</a></section><section class="field-panel" id="flood-info" hidden><div class="section-kicker">MODEL FLOOD FOOTPRINT</div><h2>Flooded areas, across all land</h2><p class="muted">Blue marks 10 m cells classified as flooded. Field outlines are hidden in this view.</p><div class="field-rows"><div class="field-row"><span>Detected footprint</span><strong id="footprint-area">—</strong></div><div class="field-row"><span>No flood detected</span><strong id="footprint-clear">—</strong></div><div class="field-row"><span>Unknown / no coverage</span><strong id="footprint-unknown">—</strong></div></div><p class="assumption-note">Historical detection using both radar dates, not a future forecast. Flood accuracy is unvalidated; permanent water and false positives may remain. Transparent areas are not proven dry. Flood depth and duration are not measured.</p><p class="map-note">These all-land hectares differ from flooded rice hectares in the crop views.</p><a class="text-button" href="data/flood_footprint.json" download>Footprint metadata ↓</a></section><section class="field-panel" id="field-panel" aria-live="polite"><div class="section-kicker">FIELD INSPECTOR</div><h2>Select a paddy field</h2><p class="muted">Hover over a polygon to see its data. Click it to pin the details here.</p><div class="empty-field">⌖<span>Every shape is a real mapped parcel.</span><small>2021 MAFF-derived boundaries</small></div></section>
+</aside></section>
+<section class="table-panel"><div class="panel-top"><div><h2>Fields in focus</h2><p id="table-note">Largest scenario losses first · same filter as the map</p></div><div class="table-actions"><input id="search" type="search" placeholder="Find a field ID…" aria-label="Search field ID"><button class="small-button" id="download-csv">↓ Export visible fields</button></div></div><div class="table-scroll"><table><thead><tr><th>Field ID</th><th>Parcel area</th><th id="table-third">Flood overlap</th><th id="table-fourth">Scenario loss</th><th id="table-fifth">Radar samples</th><th id="table-sixth">Status</th></tr></thead><tbody id="field-table"><tr><td colspan="6">Loading…</td></tr></tbody></table></div><div class="table-bottom"><span id="table-count"></span><button class="small-button" id="load-more">Show more fields</button></div></section>
+<footer class="footer"><span>Rice Flood Observatory <span class="footer-sep">/</span> A reproducible research prototype</span><button class="text-button" id="sources-bottom">Sources, assumptions & limitations ↗</button><span>Historical analysis · not live monitoring</span></footer>
+<div id="error" role="alert" hidden></div>
+</main>
+<dialog id="sources-dialog"><div class="dialog-head"><div><p class="eyebrow">UNDER THE MAP</p><h2>Data, assumptions & limitations</h2></div><button id="sources-close" aria-label="Close data and methodology" class="small-button">✕</button></div><div class="dialog-body"><h3>Real inputs</h3><ul><li><a href="https://www.geospatial.jp/ckan/dataset/agri-poly-2021-07/resource/c007ede4-046c-4f00-b2c2-1bf96e359996" target="_blank" rel="noreferrer">2021 Koriyama paddy parcel boundaries</a>: MAFF Fude polygons, transformed and distributed by AIGID. Kind = 田. These are agricultural parcel approximations, not surveyed property boundaries or a 2019 rice census.</li><li><a href="https://planetarycomputer.microsoft.com/dataset/sentinel-1-rtc" target="_blank" rel="noreferrer">Sentinel-1 RTC imagery</a>: before 7 October 2019, 05:43 JST; after 13 October 2019, 05:42 JST. Descending orbit 46. Radar backgrounds show actual VV imagery on the selected date. The before-event image does not establish zero flooding or normal water depth.</li><li>Flood predictions: the unchanged project Random Forest using eleven pre/post VV/VH features, threshold 0.05. Independent Japanese flood accuracy has not been established.</li></ul><h3>Alignment and imagery</h3><p>Original JGD2011 field coordinates are transformed to WGS84 for Leaflet. No manual offset is applied. Source-to-display rounding is below 0.1 m; radar crops share the same grid and values. A known local parcel-to-imagery offset was reproduced near 140.32648 E, 37.38094 N. A newer 2026 official parcel layer retained the mismatch. Field-level overlap and yield scenarios remain approximate; no alignment correction is claimed. Parcels are 2021 approximations; the aerial mosaic has varying capture dates and the flood radar is from 2019. Use zero field fill to inspect local differences.</p><h3>How each field is measured</h3><p>Flood overlap is the share of valid 10 m radar pixel centres inside a parcel classified as flooded. Flooded hectares = polygon area × this share. Zero sample centres means unknown. Small parcels and mixed boundary pixels can be unreliable. Any positive sample marks “flood detected”.</p><p>Fields are selected by centroid within the earlier Koriyama study rectangle. All stats cover the selected parcels, not the whole city. Parcel boundaries have changed since the 2016 coarse paddy grid used earlier, so these area totals differ from that earlier result.</p><h3>Official event depth layer</h3><p>View 2 defaults to GSI estimated inundation depth for the Abukuma River event, with the original 0–6.5+ metre colour legend. We mosaic published XYZ tiles at native zoom 15; overzoom adds no detail. Grey marks absent depth information, not dry land. Depth estimates use 13 October aerial photography and information collected through 14 October 18:00 JST. They differ in timing and method from the 13 October 05:42 JST SAR classification. No numeric depths are decoded and view 3 remains an assumed-depth scenario. GSI estimates can omit inundation or include non-inundated areas.</p><h3>Three analysis stages</h3><p>Before: real 7 October radar, 2021 paddy-map proxy and assumed normal harvest potential. Flood extent: native 10 m classifier cells across all land in the locked study rectangle, shown without field outlines. Area totals count source pixels; the display uses nearest-neighbour reprojection. This is retrospective model detection using both 7 and 13 October imagery, not a forecast issued before the flood. Harvest impact: hypothetical production remaining and lost under the assumptions, not observed post-flood crop condition. Baseline standing potential = parcel ha × assumed yield × assumed unharvested share. Remaining potential subtracts scenario loss. Remaining standing rice per hectare divides remaining tonnes by total parcel hectares; it is not yield per harvested hectare. Reduction uses the same parcel-area denominator. Production lost shows tonnes per field. Unknown flood samples remain unknown in impact; the study total excludes these parcels from both standing-potential and remaining-potential accounting.</p><h3>The loss calculation is a scenario</h3><div class="formula">Loss (t) = predicted flooded ha × normal yield (t/ha) × unharvested fraction × damage fraction</div><p>Damage fractions are published mean Random Forest lookup predictions from <a href="https://doi.org/10.5194/nhess-26-925-2026" target="_blank" rel="noreferrer">Bill-Weilandt et al. (2026), Table S11</a>, maturity stage. This dashboard uses those exact three lookup nodes; it does not execute or retrain the original crop-damage RF. The model was developed in Thailand and Myanmar and has not been validated for this Japanese event.</p><p>Depth, duration, growth stage, yield, rice planting and harvest status are assumptions. The yield uses an illustrative paddy/rough-rice mass basis. No quality downgrade, contamination or price loss is estimated. Already harvested rice gives zero standing-crop loss. Classifier scores are not calibrated flood probabilities.</p><p>The scenarios are not confidence intervals or measured losses. Flood and crop-map errors are not included in the loss totals. The model cannot infer crop health, flood depth or duration from the before/after pair alone.</p><h3>Downloads & attribution</h3><div class="download-links"><a href="data/fields.geojson" download>Field polygons · GeoJSON ↓</a><a href="data/fields.csv" download>Source field metrics · CSV ↓</a><a href="data/metadata.json" download>Metadata & assumptions ↓</a><a href="data/provenance.json" download>Source hashes ↓</a></div><p class="muted">MAFF Fude Polygon Data / AIGID / G Spatial Information Center. Modified Copernicus Sentinel-1 data (2019), Microsoft Planetary Computer. GSI base map (contemporary context, not event-year imagery). Damage lookup: Bill-Weilandt et al. (2026), CC BY 4.0. Leaflet © its contributors.</p></div></dialog>
+</body></html>

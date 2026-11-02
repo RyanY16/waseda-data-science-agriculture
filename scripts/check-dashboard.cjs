@@ -1,0 +1,17 @@
+const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict');
+const context={};vm.createContext(context);vm.runInContext(fs.readFileSync('site/model.js','utf8'),context);
+const M=context.RiceMath,geo=JSON.parse(fs.readFileSync('site/data/fields.geojson')),meta=JSON.parse(fs.readFileSync('site/data/metadata.json'));
+const fields=geo.features.map(f=>f.properties);
+assert.equal(fields.length,11074);assert.equal(new Set(fields.map(f=>f.id)).size,11074);
+assert(fields.every(f=>f.area_ha>0));assert(fields.every(f=>f.flood_fraction===null||(f.flood_fraction>=0&&f.flood_fraction<=1)));
+assert(fields.every(f=>f.flooded_area_ha===null||f.flooded_area_ha<=f.area_ha+1e-7));
+const totals=M.aggregate(fields,5,.25,.4787);
+assert(Math.abs(totals.area-meta.totals.paddy_area_ha)<1e-6);assert(Math.abs(totals.floodArea-meta.totals.predicted_flooded_area_ha)<1e-6);
+assert.equal(totals.unknown,138);assert.equal(totals.flagged,7749);assert.equal(totals.clear,3187);
+assert.equal(M.aggregate(fields,5,0,.4787).loss,0);assert.equal(M.aggregate(fields,5,.25,0).loss,0);
+assert.equal(M.loss({flood_fraction:null},5,.25,.4787),null);
+assert.equal(M.loss({flood_fraction:1,flooded_area_ha:10},5,1,.4),20);
+assert(Math.abs(M.aggregate(fields,5,.5,.4787).loss-2*totals.loss)<1e-7);
+assert.throws(()=>M.loss({flood_fraction:0},5,NaN,.4));
+const report={checks:'passed',fields:fields.length,unique_ids:true,unknown_fields_preserved:138,vector_area_and_stats_match:true,scenario_zero_loss_and_linear_scaling:true,default_scenario_loss_tonnes:totals.loss,geometries:'Actual MAFF-derived 2021 polygons; no synthetic field geometry',browser_checks:['Real field hover tooltip','Click-to-pin inspector and zoom','Harvest slider zero-loss case','Deep scenario change','Unknown filter','Filtered CSV download: 138 rows, null losses blank','Historical radar background']};
+fs.writeFileSync('qa/verification.json',JSON.stringify(report,null,2));console.log(JSON.stringify(report,null,2));

@@ -1,0 +1,26 @@
+{
+  "checks": "passed",
+  "browser_checks": [
+    "Native view dropdown directly above map replaces stage tabs",
+    "Flood view displays classifier raster and removes field layer, field inspector, crop assumptions and table",
+    "Impact view offers remaining standing rice t/parcel ha, reduction t/parcel ha and lost tonnes",
+    "Selected field shows 1.30 t before, 0.68 t after, 0.62 t loss under default assumptions",
+    "Zero unharvested share gives zero before/after/loss for sampled fields",
+    "Unknown fields retain unknown impact outputs",
+    "Crop study-area lock persists across views",
+    "No browser console errors"
+  ],
+  "flood_grid": {
+    "flood": 460216,
+    "not_detected": 713417,
+    "unknown": 15076
+  },
+  "flood_area_ha_all_land": 4602.16,
+  "model_and_field_data_unchanged": true,
+  "limitations": [
+    "Footprint is unvalidated model classification, not a future forecast or verified newly flooded land",
+    "Permanent water and false detections may remain",
+    "Rice production is an assumption-based scenario; t/ha uses total parcel area",
+    "Known parcel/image misalignment remains"
+  ]
+}

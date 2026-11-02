@@ -1,0 +1,7 @@
+{
+  "parcel_archive_sha256": "d26634c474d2a3274641f8d1e641953558b6a56fdefc97f1205856130f802971",
+  "flood_prediction_sha256": "a7b3be61a0c5f6bd6a4b7160cd10304e6f9f76c71415d1f85061e95655fa5ae5",
+  "data_sha256": "ae8fd022453b67838e62d66b50cbf3758ba41ecd981509ae8616b75ff01bae91",
+  "preparation_sha256": "c660a8bba7cc2b2672d3a2e8fc2f847a631eef51c45f9f9890be04f7fd9eed1c",
+  "attribution": "MAFF Fude Polygon Data, transformed to geographic shapefile and municipal attributes by AIGID, via G Spatial Information Center. Modified Copernicus Sentinel-1 (2019), Microsoft Planetary Computer processing. Damage lookup: Bill-Weilandt et al. (2026), CC BY 4.0."
+}

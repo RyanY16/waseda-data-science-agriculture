@@ -1,0 +1,64 @@
+{
+  "title": "Koriyama · Hagibis 2019",
+  "boundary_year": 2021,
+  "pre_date": "2019-10-07 05:43 JST",
+  "post_date": "2019-10-13 05:42 JST",
+  "totals": {
+    "fields": 11074,
+    "paddy_area_ha": 1270.920738,
+    "sampled_fields": 10936,
+    "unknown_fields": 138,
+    "flood_detected_fields": 7749,
+    "no_flood_detected_fields": 3187,
+    "predicted_flooded_area_ha": 519.3281562,
+    "unknown_area_ha": 1.3396477
+  },
+  "scenarios": [
+    {
+      "name": "shallow_short",
+      "depth_cm": 29.5,
+      "duration_days": 4,
+      "damage_fraction": 0.3661
+    },
+    {
+      "name": "middle",
+      "depth_cm": 109.5,
+      "duration_days": 8,
+      "damage_fraction": 0.47869999999999996
+    },
+    {
+      "name": "deep_long",
+      "depth_cm": 189.5,
+      "duration_days": 12,
+      "damage_fraction": 0.8092
+    }
+  ],
+  "radar_bounds": [
+    [
+      37.34933452330074,
+      140.3191366662772
+    ],
+    [
+      37.440703540187954,
+      140.44070865846575
+    ]
+  ],
+  "default_yield_t_ha": 5,
+  "default_unharvested_fraction": 0.25,
+  "source_urls": {
+    "parcels": "https://www.geospatial.jp/ckan/dataset/agri-poly-2021-07/resource/c007ede4-046c-4f00-b2c2-1bf96e359996",
+    "maff": "https://www.maff.go.jp/j/tokei/porigon/",
+    "radar": "https://planetarycomputer.microsoft.com/dataset/sentinel-1-rtc",
+    "damage": "https://doi.org/10.5194/nhess-26-925-2026",
+    "basemap": "https://maps.gsi.go.jp/development/ichiran.html"
+  },
+  "methodology": "MAFF-derived 2021 paddy parcels (Kind=田), selected by centroid in the existing Koriyama AOI. Flood fraction = positive frozen Japanese RF pixels / valid 10 m pixel centers inside parcel. Flooded hectares = projected vector parcel hectares × sampled fraction. Parcels with no pixel centers are unknown, not dry.",
+  "caveats": [
+    "Boundaries are from 2021, radar from 2019. Paddy classification does not verify rice planted or standing in 2019.",
+    "Parcel areas are computed geometry, not surveyed cadastral area. Ten-metre mixed pixels and alignment affect small parcels.",
+    "No independent Japanese flood accuracy has been established. Any positive sampled pixel marks a parcel as some flood detected.",
+    "Depth, duration, growth stage, normal yield and harvest fraction are assumptions. Damage lookup trained in Thailand/Myanmar; not validated in Japan.",
+    "Totals use the parcel domain and vector-area-weighted flood fractions; they intentionally differ from the earlier 2016 coarse-grid result of 743.13 ha.",
+    "No flood probability, real-time monitoring, yield-loss accuracy or quality-loss estimate is supplied."
+  ]
+}

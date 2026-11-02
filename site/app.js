@@ -1,497 +1,119 @@
-const assetVersion = "20260708-yield-polygons";
-const withAssetVersion = (url) => `${url}${url.includes("?") ? "&" : "?"}v=${assetVersion}`;
-const metadataUrl = withAssetVersion("/outputs/shibata_city_152064/yield_metadata.json");
-const geojsonUrl = withAssetVersion("/outputs/shibata_city_152064/field_yield_estimates.geojson");
-const viewConfigUrl = withAssetVersion("/outputs/shibata_city_152064/views/views.json");
-
-const dom = {
-  sceneId: document.getElementById("scene-id"),
-  sceneDate: document.getElementById("scene-date"),
-  sceneCloud: document.getElementById("scene-cloud"),
-  fieldCount: document.getElementById("field-count"),
-  medianYield: document.getElementById("median-yield"),
-  highYield: document.getElementById("high-yield"),
-  fieldInfoToggle: document.getElementById("field-info-toggle"),
-  empty: document.getElementById("selection-empty"),
-  details: document.getElementById("selection-details"),
-  detailYield: document.getElementById("detail-yield"),
-  detailB02: document.getElementById("detail-b02"),
-  detailB03: document.getElementById("detail-b03"),
-  detailB04: document.getElementById("detail-b04"),
-  detailB08: document.getElementById("detail-b08"),
-  detailNdvi: document.getElementById("detail-ndvi"),
-  detailSavi: document.getElementById("detail-savi"),
-  detailLai: document.getElementById("detail-lai"),
-  detailPixels: document.getElementById("detail-pixels"),
-  detailId: document.getElementById("detail-id"),
-  detailArea: document.getElementById("detail-area"),
-  detailCentroid: document.getElementById("detail-centroid"),
-  detailMuni: document.getElementById("detail-muni"),
-  bandPreview: document.getElementById("band-preview"),
-  mapViewSwitcher: document.getElementById("map-view-switcher"),
-  sidebar: document.querySelector(".sidebar"),
-  methodologyPanel: document.querySelector(".methodology-panel"),
-};
-
-const defaultStyle = {
-  color: "rgba(14, 38, 29, 0.18)",
-  weight: 0.35,
-  fillColor: "#d9e3df",
-  fillOpacity: 0.42,
-};
-
-const activeStyle = {
-  color: "#0f355a",
-  weight: 1.4,
-  fillColor: "#4d7fbe",
-  fillOpacity: 0.28,
-};
-
-const yieldPalette = ["#fff4b8", "#cbe986", "#78c679", "#31a354", "#006837"];
-
-const map = L.map("map", {
-  preferCanvas: true,
-  zoomControl: true,
-  maxBoundsViscosity: 1.0,
-});
-
-L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {
-  subdomains: "abcd",
-  maxZoom: 20,
-  attribution: "&copy; OpenStreetMap &copy; CARTO",
-}).addTo(map);
-
-let selectedLayer = null;
-let yieldBreaks = [];
-let legendControl = null;
-let currentViewId = null;
-let currentImageOverlay = null;
-let currentViewConfig = null;
-let fieldLayer = null;
-let fieldGeojson = null;
-let rasterRequestId = 0;
-let selectedFieldId = null;
-let fieldInfoEnabled = false;
-const preloadedImages = new Set();
-const overlayLayerCache = new Map();
-
-map.createPane("rasterPane");
-map.getPane("rasterPane").style.zIndex = 260;
-map.createPane("fieldPane");
-map.getPane("fieldPane").style.zIndex = 420;
-const fieldRenderer = L.canvas({ pane: "fieldPane" });
-
-function formatArea(areaM2) {
-  if (!Number.isFinite(areaM2)) return "Unknown";
-  if (areaM2 >= 10000) return `${(areaM2 / 10000).toFixed(2)} ha`;
-  return `${Math.round(areaM2).toLocaleString()} m²`;
-}
-
-function formatDate(isoDate) {
-  const parsed = new Date(isoDate);
-  if (Number.isNaN(parsed.getTime())) return isoDate || "Unknown";
-  return parsed.toLocaleDateString("en-US", {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-  });
-}
-
-function formatYield(value) {
-  return Number.isFinite(value) ? `${value.toFixed(2)} t/ha` : "Unavailable";
-}
-
-function formatMetric(value) {
-  return Number.isFinite(value) ? value.toFixed(3) : "Unavailable";
-}
-
-function formatLegendValue(value, units) {
-  if (!Number.isFinite(value)) return "n/a";
-  const formatted = units === "t/ha" ? value.toFixed(2) : value.toFixed(3);
-  return units && !["index", "reflectance"].includes(units) ? `${formatted} ${units}` : formatted;
-}
-
-function escapeHtml(value) {
-  return String(value ?? "")
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#039;");
-}
-
-function formatPixelCount(value) {
-  return Number.isFinite(value) ? value.toLocaleString() : "Unavailable";
-}
-
-function buildFieldSummaryHtml(properties) {
-  const rows = [
-    ["Expected yield", formatYield(properties.prototype_yield_t_ha)],
-    ["NDVI", formatMetric(properties.NDVI)],
-    ["LAI", formatMetric(properties.LAI)],
-    ["NIR / B08", formatMetric(properties.B08_mean)],
-    ["Red / B04", formatMetric(properties.B04_mean)],
-    ["Green / B03", formatMetric(properties.B03_mean)],
-    ["Blue / B02", formatMetric(properties.B02_mean)],
-    ["SAVI", formatMetric(properties.SAVI)],
-    ["Valid pixels", formatPixelCount(properties.pixel_count)],
-    ["Area", formatArea(properties.area_m2)],
-  ];
-
-  return `
-    <div class="field-popup">
-      <div class="field-popup-title">Field ${escapeHtml(properties.field_id)}</div>
-      <div class="field-popup-grid">
-        ${rows
-          .map(
-            ([label, value]) =>
-              `<div><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>`
-          )
-          .join("")}
-      </div>
-    </div>
-  `;
-}
-
-function buildFieldTooltipHtml(properties) {
-  return `
-    <strong>${formatYield(properties.prototype_yield_t_ha)}</strong>
-    <br>NDVI ${formatMetric(properties.NDVI)}
-    <br>NIR ${formatMetric(properties.B08_mean)}
-    <br>${formatArea(properties.area_m2)}
-  `;
-}
-
-function populateScene(meta, geojson) {
-  const yieldValues = geojson.features
-    .map((feature) => feature.properties.prototype_yield_t_ha)
-    .filter((value) => Number.isFinite(value));
-
-  dom.sceneId.textContent = meta.sentinel_scene_id || "Unavailable";
-  dom.sceneDate.textContent = formatDate(meta.sentinel_datetime);
-  dom.sceneCloud.textContent = Number.isFinite(meta.sentinel_cloud_cover_pct)
-    ? `${meta.sentinel_cloud_cover_pct.toFixed(2)}%`
-    : "Unknown";
-  dom.fieldCount.textContent = geojson.features.length.toLocaleString();
-  dom.medianYield.textContent = formatYield(median(yieldValues));
-  dom.highYield.textContent = formatYield(percentile(yieldValues, 0.75));
-}
-
-function clampMapToBbox(bbox) {
-  if (!Array.isArray(bbox) || bbox.length !== 4) {
-    return;
-  }
-  const southWest = L.latLng(bbox[1], bbox[0]);
-  const northEast = L.latLng(bbox[3], bbox[2]);
-  const bounds = L.latLngBounds(southWest, northEast);
-  map.setMaxBounds(bounds);
-  const containZoom = map.getBoundsZoom(bounds, false);
-  const coverZoom = map.getBoundsZoom(bounds, true);
-  const lockedZoom = Math.max(containZoom, coverZoom);
-  map.setView(bounds.getCenter(), lockedZoom);
-  map.setMinZoom(lockedZoom);
-  map.setMaxZoom(18);
-}
-
-function setSelection(properties) {
-  dom.empty.classList.add("hidden");
-  dom.details.classList.remove("hidden");
-  selectedFieldId = properties.field_id;
-  dom.detailYield.textContent = formatYield(properties.prototype_yield_t_ha);
-  dom.detailB02.textContent = formatMetric(properties.B02_mean);
-  dom.detailB03.textContent = formatMetric(properties.B03_mean);
-  dom.detailB04.textContent = formatMetric(properties.B04_mean);
-  dom.detailB08.textContent = formatMetric(properties.B08_mean);
-  dom.detailNdvi.textContent = formatMetric(properties.NDVI);
-  dom.detailSavi.textContent = formatMetric(properties.SAVI);
-  dom.detailLai.textContent = formatMetric(properties.LAI);
-  dom.detailPixels.textContent = formatPixelCount(properties.pixel_count);
-  dom.detailId.textContent = properties.field_id;
-  dom.detailArea.textContent = formatArea(properties.area_m2);
-  dom.detailCentroid.textContent = `${properties.point_lat.toFixed(5)}, ${properties.point_lng.toFixed(5)}`;
-  dom.detailMuni.textContent = properties.local_government_cd;
-}
-
-function percentile(values, ratio) {
-  if (!values.length) return NaN;
-  const sorted = [...values].sort((a, b) => a - b);
-  const index = Math.min(sorted.length - 1, Math.max(0, Math.floor(ratio * (sorted.length - 1))));
-  return sorted[index];
-}
-
-function median(values) {
-  if (!values.length) return NaN;
-  const sorted = [...values].sort((a, b) => a - b);
-  const middle = Math.floor(sorted.length / 2);
-  return sorted.length % 2 === 0
-    ? (sorted[middle - 1] + sorted[middle]) / 2
-    : sorted[middle];
-}
-
-function buildYieldBreaks(geojson) {
-  const yieldValues = geojson.features
-    .map((feature) => feature.properties.prototype_yield_t_ha)
-    .filter((value) => Number.isFinite(value));
-  return [
-    percentile(yieldValues, 0.2),
-    percentile(yieldValues, 0.4),
-    percentile(yieldValues, 0.6),
-    percentile(yieldValues, 0.8),
-  ];
-}
-
-function yieldColor(value) {
-  if (!Number.isFinite(value)) return "#d9e3df";
-  if (!yieldBreaks.length) return yieldPalette[2];
-  if (value <= yieldBreaks[0]) return yieldPalette[0];
-  if (value <= yieldBreaks[1]) return yieldPalette[1];
-  if (value <= yieldBreaks[2]) return yieldPalette[2];
-  if (value <= yieldBreaks[3]) return yieldPalette[3];
-  return yieldPalette[4];
-}
-
-function isYieldView() {
-  return currentViewId === "yield";
-}
-
-function addValueLegend(view) {
-  if (!view?.legend) {
-    removeLegend();
-    return;
-  }
-  if (legendControl) {
-    legendControl.remove();
-  }
-  legendControl = L.control({ position: "bottomright" });
-  legendControl.onAdd = () => {
-    const div = L.DomUtil.create("div", "yield-legend");
-    const { title, units, min, mid, max, gradient } = view.legend;
-    div.innerHTML = `
-      <strong>${escapeHtml(title)}</strong>
-      <div class="value-ramp" style="background:${escapeHtml(gradient)}"></div>
-      <div class="value-ramp-labels">
-        <span>${escapeHtml(formatLegendValue(min, units))}</span>
-        <span>${escapeHtml(formatLegendValue(mid, units))}</span>
-        <span>${escapeHtml(formatLegendValue(max, units))}</span>
-      </div>
-    `;
-    return div;
-  };
-  legendControl.addTo(map);
-}
-
-function removeLegend() {
-  if (legendControl) {
-    legendControl.remove();
-    legendControl = null;
-  }
-}
-
-function styleForFeature(feature) {
-  if (isYieldView()) {
-    const yieldValue = feature.properties?.prototype_yield_t_ha;
-    return {
-      color: "rgba(15, 53, 90, 0.62)",
-      weight: 0.45,
-      fillColor: yieldColor(yieldValue),
-      fillOpacity: Number.isFinite(yieldValue) ? 0.76 : 0.22,
-    };
-  }
-
-  return {
-    color: "rgba(15, 53, 90, 0.72)",
-    weight: 0.7,
-    fillColor: "#ffffff",
-    fillOpacity: 0.06,
-  };
-}
-
-function restoreSelectedLayer() {
-  if (!fieldLayer || !selectedFieldId) {
-    return;
-  }
-  fieldLayer.eachLayer((layer) => {
-    if (layer.feature?.properties?.field_id === selectedFieldId) {
-      selectedLayer = layer;
-      selectedLayer.setStyle(activeStyle);
+(async function(){
+  'use strict';
+  const $=s=>document.querySelector(s),fmt=(n,d=1)=>n===null||!Number.isFinite(n)?'Unknown':n.toLocaleString('en-US',{minimumFractionDigits:d,maximumFractionDigits:d});
+  const state={scenario:1,yield:5,unharvested:.25,mode:'before',view:'before',floodLayer:'depth',impactMetric:'remaining',filter:'all',search:'',limit:12,pinned:null,hovered:null};
+  const dialog=$('#sources-dialog');$('#sources-open').onclick=$('#sources-bottom').onclick=()=>dialog.showModal();$('#sources-close').onclick=()=>dialog.close();dialog.addEventListener('click',e=>{if(e.target===dialog)dialog.close();});
+  try{
+    const responses=await Promise.all([fetch('data/metadata.json'),fetch('data/fields.geojson'),fetch('data/flood_footprint.json'),fetch('data/gsi_depth.json')]);if(responses.some(r=>!r.ok))throw new Error('Could not load the field dataset. Please refresh.');
+    const [meta,geo,footprintMeta,depthMeta]=await Promise.all(responses.map(r=>r.json()));
+    const fields=geo.features.map(f=>f.properties),byId=new Map(fields.map(p=>[p.id,p])),layers=new Map();
+    const map=L.map('map',{preferCanvas:true,zoomControl:false,minZoom:10,maxZoom:19,maxBoundsViscosity:1,zoomSnap:.25,scrollWheelZoom:true});$('#map-loading')?.remove();L.control.zoom({position:'bottomleft'}).addTo(map);
+    const tiles=L.tileLayer('https://cyberjapandata.gsi.go.jp/xyz/pale/{z}/{x}/{y}.png',{attribution:'<a href="https://maps.gsi.go.jp/development/ichiran.html" target="_blank" rel="noreferrer">GSI</a> · MAFF/AIGID · Copernicus',maxNativeZoom:18,maxZoom:19});
+    const aerial=L.tileLayer('https://cyberjapandata.gsi.go.jp/xyz/seamlessphoto/{z}/{x}/{y}.jpg',{attribution:'<a href="https://maps.gsi.go.jp/development/ichiran.html#seamlessphoto" target="_blank" rel="noreferrer">GSI aerial imagery</a> · MAFF/AIGID · Landsat8 (GSI,TSIC,GEO Grid/AIST; USGS) · GEBCO',maxNativeZoom:18,maxZoom:19}).addTo(map);
+    let tileErrors=0;tiles.on('tileerror',()=>{tileErrors++;if(tileErrors===4){$('#background').title='Base-map tiles unavailable; field geometry remains available. Try the 2019 radar background.';}});
+    const radar=L.imageOverlay('data/radar_post.webp',meta.radar_bounds,{opacity:.88,attribution:'Modified Copernicus Sentinel-1 (2019) / Microsoft Planetary Computer'});
+    const preRadar=L.imageOverlay('data/radar_pre.webp',meta.radar_bounds,{opacity:.88,attribution:'Modified Copernicus Sentinel-1 (7 Oct 2019) / Microsoft Planetary Computer'});
+    const floodFootprint=L.imageOverlay('data/flood_footprint.png',footprintMeta.bounds,{opacity:.85,interactive:false,attribution:'Flood classification: project Random Forest · Sentinel-1 2019'});
+    const depthOverlay=L.imageOverlay('data/gsi_depth.png',depthMeta.bounds,{opacity:.85,interactive:false,attribution:'Estimated inundation depth: <a href="https://www.gsi.go.jp/BOUSAI/R1.taihuu19gou.html" target="_blank" rel="noreferrer">GSI (2019)</a> · Grey unknown added by project'});
+    function activeFloodLayer(){return state.floodLayer==='depth'?depthOverlay:floodFootprint;}
+    function updateFloodOverlay(){[depthOverlay,floodFootprint].forEach(layer=>map.removeLayer(layer));if(state.view==='flood'){const layer=activeFloodLayer();layer.setOpacity(Number($('#field-opacity').value)/100).addTo(map);layer.bringToFront();}}
+    const renderer=L.canvas({padding:.25,tolerance:3});
+    function scenario(){return meta.scenarios[state.scenario];}
+    function fieldLoss(p){return RiceMath.loss(p,state.yield,state.unharvested,scenario().damage_fraction);}
+    function standing(p){return p.area_ha*state.yield*state.unharvested;}
+    function remaining(p){const loss=fieldLoss(p);return loss===null?null:Math.max(0,standing(p)-loss);}
+    function yieldReduction(p){const loss=fieldLoss(p);return loss===null?null:loss/p.area_ha;}
+    function yieldRemaining(p){const value=remaining(p);return value===null?null:value/p.area_ha;}
+    function impactValue(p){return state.impactMetric==='remaining'?yieldRemaining(p):state.impactMetric==='difference'?yieldReduction(p):fieldLoss(p);}
+    function color(p){
+      if(state.view==='before')return '#8eb77d';
+      if(p.flood_fraction===null)return '#b4bab4';
+      const value=impactValue(p);if(value===0)return state.impactMetric==='remaining'?'#edeccf':'#e4eadf';
+      const x=state.impactMetric==='remaining'?value/Math.max(state.yield*state.unharvested,.00001):state.impactMetric==='difference'?value/Math.max(state.yield*state.unharvested,.00001):value;
+      if(state.impactMetric==='remaining')return x<.25?'#e9dcad':x<.5?'#c1d094':x<.75?'#7fa66c':'#376c48';
+      return x<.1?'#edcd86':x<.3?'#e7a75c':x<.6?'#d77d40':'#b84f35';
     }
-  });
-}
-
-function renderFieldLayer(geojson) {
-  if (fieldLayer) {
-    map.removeLayer(fieldLayer);
-    fieldLayer = null;
-  }
-
-  fieldLayer = L.geoJSON(geojson, {
-    renderer: fieldRenderer,
-    pane: "fieldPane",
-    style: (feature) => styleForFeature(feature),
-    onEachFeature: (feature, featureLayer) => {
-      featureLayer.on("click", () => {
-        if (selectedLayer) {
-          selectedLayer.setStyle(styleForFeature(selectedLayer.feature));
-        }
-        selectedLayer = featureLayer;
-        selectedLayer.setStyle(activeStyle);
-        setSelection(feature.properties);
-      });
-
-      featureLayer.bindPopup(buildFieldSummaryHtml(feature.properties), {
-        className: "field-popup-shell",
-        maxWidth: 360,
-      });
-      featureLayer.bindTooltip(buildFieldTooltipHtml(feature.properties), {
-        sticky: true,
-        direction: "top",
-        opacity: 0.94,
-      });
-    },
-  }).addTo(map);
-
-  restoreSelectedLayer();
-}
-
-function updateFieldLayerVisibility() {
-  const shouldShowFields = fieldInfoEnabled || isYieldView();
-  map.getPane("fieldPane").style.display = shouldShowFields ? "" : "none";
-
-  if (!shouldShowFields) {
-    if (fieldLayer) {
-      map.removeLayer(fieldLayer);
-      fieldLayer = null;
-      selectedLayer = null;
+    function style(f){const p=f.properties,pinned=p.id===state.pinned;return{color:pinned?'#fff5ac':$('#background').value==='map'?'#59744c':'#f6ebba',weight:pinned?2.4:.9,opacity:pinned?1:.8,fillColor:color(p),fillOpacity:Number($('#field-opacity').value)/100};}
+    function tooltip(p){const rows=state.view==='before'?`<div class="tooltip-row">Standing harvest potential <b>${fmt(standing(p),2)} t*</b></div><div class="tooltip-row">Pre-event VV <b>${fmt(p.pre_vv_db,1)} dB</b></div>`:state.view==='flood'?`<div class="tooltip-row">Detected flood overlap <b>${p.flood_fraction===null?'Unknown':fmt(p.flood_fraction*100,1)+'%'}</b></div>`:`<div class="tooltip-row">Remaining standing rice <b>${fmt(yieldRemaining(p),2)} t/ha*</b></div><div class="tooltip-row loss">Scenario lost <b>${fmt(fieldLoss(p),2)} t</b></div><div class="tooltip-row">Scenario remaining <b>${fmt(remaining(p),2)} t</b></div>`;return `<div class="tooltip-kicker">${state.view==='before'?'BEFORE EVENT':state.view==='flood'?'FLOOD DETECTION':'HARVEST SCENARIO'}</div><div class="tooltip-id">${p.id}</div><div class="tooltip-row">Parcel area <b>${fmt(p.area_ha,3)} ha</b></div>${rows}<div class="tooltip-note">${state.view==='before'?'*Assumed yield and standing crop; water depth unknown':state.view==='flood'?'Retrospective classification, not a forecast':'Assumed crop damage, not measured harvest loss'}<br>Click to pin field details</div>`;}
+    function badge(p){const status=RiceMath.status(p);return `<span class="status-badge ${status==='clear'?'clear':status==='unknown'?'unknown-badge':''}">${status==='flooded'?'Flood detected':status==='clear'?'No flood detected':'Unknown / no samples'}</span>`;}
+    function inspector(p){
+      const row=(label,value)=>`<div class="field-row"><span>${label}</span><strong>${value}</strong></div>`;
+      const rows=state.view==='before'?row('Crop map proxy','Paddy · 2021')+row('Observed water depth','Unavailable')+row('Observed crop condition','Unavailable')+row('Pre-event VV / VH',`${fmt(p.pre_vv_db,1)} / ${fmt(p.pre_vh_db,1)} dB`)+row('Normal full-season potential',fmt(p.area_ha*state.yield,2)+' t*')+row('Standing harvest potential',fmt(standing(p),2)+' t*'):state.view==='flood'?row('Detected flooded area',p.flooded_area_ha===null?'Unknown':fmt(p.flooded_area_ha,3)+' ha')+row('Flood overlap',p.flood_fraction===null?'Unknown':fmt(p.flood_fraction*100,1)+'%')+row('Water depth / duration','Not measured')+row('Pre → post VV',`${fmt(p.pre_vv_db,1)} → ${fmt(p.post_vv_db,1)} dB`)+row('Valid / flooded samples',`${p.valid_pixels} / ${p.flood_pixels}`):row('Standing potential before flood',fmt(standing(p),2)+' t*')+row('Scenario production lost',fmt(fieldLoss(p),2)+' t*')+row('Scenario production remaining',fmt(remaining(p),2)+' t*')+row('Assumed depth / duration',`${scenario().depth_cm/100} m / ${scenario().duration_days} days`)+row('Standing rice remaining',fmt(yieldRemaining(p),2)+' t/ha*')+row('Reduction from before',yieldReduction(p)===null?'Unknown':'−'+fmt(yieldReduction(p),2)+' t/ha*')+row('Observed harvest / crop health','Unavailable');
+      $('#field-panel').innerHTML=`<div class="section-kicker">${state.pinned===p.id?'PINNED FIELD':'FIELD INSPECTOR'}</div><h2 class="field-heading">${p.id}</h2>${state.view==='before'?'<span class="status-badge clear">Mapped paddy · crop unverified</span>':badge(p)}<div class="field-rows">${row('Parcel area',fmt(p.area_ha,3)+' ha')}${rows}${row('Boundary / edit year',p.boundary_year+' / '+p.edit_year)}</div>${state.view==='impact'?`<div class="harvest-comparison"><p>Before flood <strong>${fmt(standing(p),2)} t*</strong></p><p>After flood <strong>${fmt(remaining(p),2)} t*</strong></p><p>Difference <strong>${fieldLoss(p)===null?'Unknown':'−'+fmt(fieldLoss(p),2)+' t'}</strong></p></div><p class="metric-caption">t/ha uses total parcel hectares and only the assumed standing crop. This is not observed yield per harvested hectare.</p>`:''}${p.valid_pixels<5?'<p class="sample-warning">Few or no radar samples: high boundary-sampling uncertainty.</p>':''}<p class="assumption-note">*Potential and loss use ${fmt(state.yield,1)} t/ha and ${fmt(state.unharvested*100,0)}% unharvested. Crop presence and harvest are not observed. No flood detection does not establish crop health.</p><div class="field-actions"><button class="text-button" id="zoom-field">⌖ Zoom to field</button>${state.pinned?'<button class="text-button" id="unpin-field">Unpin</button>':''}</div>`;
+      $('#zoom-field').onclick=()=>{map.fitBounds(layers.get(p.id).getBounds(),{padding:[80,80],maxZoom:18});$('#map').scrollIntoView({behavior:'smooth',block:'center'});};
+      if($('#unpin-field'))$('#unpin-field').onclick=()=>{const prev=state.pinned;state.pinned=null;if(prev)layers.get(prev).setStyle(style(layers.get(prev).feature));inspector(p);};
     }
-    return;
-  }
+    function select(id,zoom=false){const old=state.pinned;state.pinned=id;if(old&&layers.has(old))layers.get(old).setStyle(style(layers.get(old).feature));const layer=layers.get(id);layer.setStyle(style(layer.feature));layer.bringToFront();inspector(byId.get(id));if(zoom){map.fitBounds(layer.getBounds(),{padding:[100,100],maxZoom:17});$('#map').scrollIntoView({behavior:'smooth',block:'center'});}}
+    const group=L.geoJSON(geo,{renderer,style,onEachFeature:(f,layer)=>{const p=f.properties;layers.set(p.id,layer);layer.bindTooltip(()=>tooltip(p),{sticky:true,className:'field-tooltip',direction:'top',offset:[0,-9]});layer.on({mouseover:()=>{state.hovered=p.id;layer.setStyle({weight:1.8,opacity:1,color:'#254d32'});if(!state.pinned)inspector(p);},mouseout:()=>{state.hovered=null;layer.setStyle(style(f));},click:()=>select(p.id)});}}).addTo(map);
+    // Keep a fixed geographic study extent, independent of filters and analysis stage.
+    const bounds=group.getBounds(),studyBounds=bounds.pad(.025);
+    map.setMaxBounds(studyBounds);
+    [tiles,aerial].forEach(layer=>{layer.options.noWrap=true;layer.options.bounds=studyBounds;});
+    // Hide surrounding geography when the viewport's aspect ratio leaves margins.
+    map.createPane('studyMask');map.getPane('studyMask').style.zIndex=450;map.getPane('studyMask').style.pointerEvents='none';
+    L.polygon([[[-85,-180],[-85,180],[85,180],[85,-180]],[studyBounds.getSouthWest(),studyBounds.getNorthWest(),studyBounds.getNorthEast(),studyBounds.getSouthEast()]],{pane:'studyMask',interactive:false,stroke:false,fillColor:'#e7eddf',fillOpacity:1}).addTo(map);
+    function constrainStudyView(){map.setMinZoom(map.getBoundsZoom(studyBounds,true));map.panInsideBounds(studyBounds,{animate:false});}
+    map.setView(studyBounds.getCenter(),map.getBoundsZoom(studyBounds,true),{animate:false});constrainStudyView();map.on('resize',constrainStudyView);
+    $('#fit-map').onclick=()=>map.setView(studyBounds.getCenter(),map.getMinZoom(),{animate:false});
+    $('#background').onchange=()=>{[tiles,aerial,radar,preRadar].forEach(layer=>map.removeLayer(layer));const chosen=$('#background').value;const layer=chosen==='radar'?(state.view==='before'?preRadar:radar):chosen==='aerial'?aerial:tiles;layer.addTo(map);layer.bringToBack();$('#alignment-note').textContent=chosen==='aerial'?'GSI aerial mosaic: capture dates vary; not an October 2019 flood image. Compare parcel edges with the photograph using field opacity.':chosen==='radar'?`${state.view==='before'?'7 October':'13 October'} 2019 VV radar: brightness is backscatter, not water depth. 10 m samples cannot resolve every field edge.`:'GSI cartographic map: roads and land-use symbols are schematic. Use aerial imagery to inspect field edges.';group.setStyle(style);if(state.view==='flood'){activeFloodLayer().bringToFront();if(state.floodLayer==='depth')$('#alignment-note').textContent='Background map is context only. Depth colours are the official 2019 event estimate; grey means depth is unknown. Zooming in does not add source detail.';}};
+    $('#field-opacity').oninput=e=>{$('#opacity-value').textContent=e.target.value+'%';if(state.view==='flood')activeFloodLayer().setOpacity(Number(e.target.value)/100);else group.setStyle(style);};
+    function included(p){return(state.filter==='all'||RiceMath.status(p)===state.filter)&&(!state.search||p.id.includes(state.search));}
+    function filtered(){return fields.filter(included);}
+    function updateTable(){const all=filtered();all.sort((a,b)=>state.view==='before'?b.area_ha-a.area_ha:state.view==='flood'?(b.flooded_area_ha??-1)-(a.flooded_area_ha??-1):(fieldLoss(b)??-1)-(fieldLoss(a)??-1));
+      const headings=state.view==='before'?['Standing potential*','Pre-event VV','Pre-event VH','Crop proxy']:state.view==='flood'?['Flood overlap','Flooded area','Radar samples','Detection']:['Before → after*','Reduction t/ha*','Production lost*','Detection'];
+      ['third','fourth','fifth','sixth'].forEach((key,i)=>$('#table-'+key).textContent=headings[i]);
+      $('#table-note').textContent=state.view==='before'?'Largest fields first · *assumed standing harvest potential':state.view==='flood'?'Largest detected flooded areas first · retrospective model output':'Largest scenario losses first · *assumptions, not observed harvest';
+      $('#field-table').innerHTML=all.slice(0,state.limit).map(p=>{const cells=state.view==='before'?[fmt(standing(p),2)+' t',fmt(p.pre_vv_db,1)+' dB',fmt(p.pre_vh_db,1)+' dB','Mapped paddy']:state.view==='flood'?[p.flood_fraction===null?'Unknown':fmt(p.flood_fraction*100,1)+'%',p.flooded_area_ha===null?'Unknown':fmt(p.flooded_area_ha,3)+' ha',fmt(p.valid_pixels,0),badge(p)]:[fmt(standing(p),2)+' → '+fmt(remaining(p),2)+' t',yieldReduction(p)===null?'Unknown':'−'+fmt(yieldReduction(p),2)+' t/ha',fieldLoss(p)===null?'Unknown':fmt(fieldLoss(p),2)+' t',badge(p)];return `<tr data-id="${p.id}" tabindex="0" aria-label="Inspect field ${p.id}"><td>${p.id}</td><td>${fmt(p.area_ha,3)} ha</td>${cells.map(c=>'<td>'+c+'</td>').join('')}</tr>`;}).join('')||'<tr><td colspan="6">No fields match this filter.</td></tr>';
+      $('#table-count').textContent=`Showing ${Math.min(state.limit,all.length).toLocaleString()} of ${all.length.toLocaleString()} matching fields`;$('#load-more').hidden=state.limit>=all.length;
+      $('#field-table').querySelectorAll('tr[data-id]').forEach(tr=>{tr.onclick=()=>select(tr.dataset.id,true);tr.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();select(tr.dataset.id,true);}};});
+    }
+    function renderFarmerSummary(){
+      const h=RiceMath.harvestSummary(fields,state.yield,state.unharvested,scenario().damage_fraction);
+      $('#farm-area').textContent=fmt(h.area,1)+' ha';$('#farm-before').textContent=fmt(h.before,0)+' tonnes';$('#farm-flood').textContent=fmt(h.floodArea,1)+' ha';$('#farm-after').textContent=fmt(h.after,0)+' tonnes';
+      $('#farm-change').textContent=h.changePercent===null?'Change unavailable':(h.changePercent<0?'−':'')+fmt(Math.abs(h.changePercent),1)+'%';$('#farm-loss').textContent=fmt(h.loss,0)+' tonnes less';
+      $('#farm-flood-note').textContent=`${fmt(h.floodArea/h.assessedArea*100,1)}% of assessed paddy area shows detected flooding; not all of its rice is lost.`;
+      $('#farm-coverage').textContent=`Harvest comparison: the same ${fmt(h.assessedArea,1)} ha before and after. ${fmt(h.unknownArea,1)} ha (${fmt(h.unknown,0)} parcels) lack flood samples and are excluded. Map filters do not change this study-wide summary.`;
+      $('#farm-assumptions').textContent=`Assumed normal yield ${fmt(state.yield,1)} t/ha; ${fmt(state.unharvested*100,0)}% still unharvested; ${scenario().depth_cm/100} m water for ${scenario().duration_days} days; ${fmt(scenario().damage_fraction*100,2)}% conditional crop loss. Physical rice mass only; no price or quality loss.`;
+      $('#farm-standing').textContent=`Standing crop alone: ${fmt(h.standingBefore,0)} → ${fmt(h.standingAfter,0)} tonnes. The field map in view 3 shows this standing-crop component, while the summary above reports the season total.`;
+    }
+    function refreshMetrics(){$('#harvest-value').textContent=fmt(state.unharvested*100,0)+'%';$('#yield-value').textContent=fmt(state.yield,1)+' t/ha';$('#damage-label').textContent=fmt(scenario().damage_fraction*100,2)+'%';group.setStyle(style);if(state.pinned)inspector(byId.get(state.pinned));else if(state.hovered)inspector(byId.get(state.hovered));updateTable();renderView();renderFarmerSummary();}
+    function refreshFilter(){group.clearLayers();geo.features.filter(f=>included(f.properties)).forEach(f=>{const layer=layers.get(f.properties.id);layer.setStyle(style(f));group.addLayer(layer);});$('#visible-count').textContent=`${fmt(filtered().length,0)} of ${fmt(fields.length,0)} fields shown`;updateTable();}
+    $('#harvest').oninput=e=>{state.unharvested=Number(e.target.value)/100;refreshMetrics();};$('#yield').oninput=e=>{state.yield=Number(e.target.value);refreshMetrics();};
+    $('#scenario-buttons').querySelectorAll('button').forEach(btn=>btn.onclick=()=>{state.scenario=Number(btn.dataset.scenario);$('#scenario-buttons').querySelectorAll('button').forEach(b=>{b.classList.toggle('active',b===btn);b.setAttribute('aria-pressed',b===btn?'true':'false');});refreshMetrics();});
+    function renderView(){
+      const before=state.view==='before',flood=state.view==='flood';
+      const copy=before?['BEFORE EVENT · OBSERVED RADAR + ASSUMED CROP','What was there before the event?','7 October radar and mapped paddy parcels provide the baseline. Harvest potential assumes rice was planted, normal yield and the selected unharvested share; it is not measured crop growth.']:flood?['RETROSPECTIVE MODEL OUTPUT · 13 OCTOBER','Where did the model detect flooding?','Blue cells show the detected flood footprint across all land, with field outlines hidden. This is retrospective classification, not a forecast or a measurement of flood depth. Accuracy is unvalidated.']:['HYPOTHETICAL AFTERMATH · DAMAGE SCENARIO','What could this mean for the harvest?','Compare standing rice before and after the assumed flood damage. Choose remaining rice, yield reduction or tonnes lost. These are scenarios, not observed harvest outcomes; t/ha is per total parcel area.'];
+      ['view-evidence','view-title','view-description'].forEach((id,i)=>$('#'+id).textContent=copy[i]);$('#map-title').textContent=before?'Before-event field map':flood?'Flood-affected area':'Rice production after flood';
+      $('#water-state').textContent='Water depth: not available';$('#crop-state').textContent=before?'Crop condition: unverified paddy proxy':flood?'Flooding: model classification':'Crop damage: assumed, not observed';
+      $('.event-date span').textContent=before?'PRE-EVENT RADAR':flood?'POST-EVENT RADAR':'POST-FLOOD SCENARIO';$('.event-date strong').textContent=before?'7 Oct 2019':'13 Oct 2019';$('.event-date small').textContent=before?'05:43 JST · Sentinel-1':flood?'05:42 JST · Sentinel-1':'No observed harvest data';
+      $('#legend-first').style.background=before?'#8eb77d':flood?'#1375bd':state.impactMetric==='remaining'?'#376c48':'#b84f35';
+      $('#legend-zero').textContent=before?'Mapped paddy · crop unverified':flood?'Detected flooding':state.impactMetric==='remaining'?'More standing rice remaining':'Greater production reduction';
+      $('#legend-label').textContent=before?'Uniform crop-map proxy':flood?'Transparent: no flood detected · grey: unknown':state.impactMetric==='remaining'?`0 to ${fmt(state.yield*state.unharvested,2)} t/ha remaining*`:state.impactMetric==='difference'?`0 to ${fmt(state.yield*state.unharvested,2)} t/ha reduction*`:'Production lost: <0.1 / 0.1–0.3 / 0.3–0.6 / ≥0.6 t';
+      $('#legend-ramp').hidden=before||flood;$('#legend-ramp').style.background=state.impactMetric==='remaining'?'linear-gradient(90deg,#e9dcad,#376c48)':'linear-gradient(90deg,#edcd86,#b84f35)';
+      $('#impact-metric-label').hidden=state.view!=='impact';$('#status-filter').hidden=flood;$('#scenario-panel').hidden=flood;$('#field-panel').hidden=flood;$('#flood-info').hidden=!flood;$('.table-panel').hidden=flood;
+      $('#map-lock-note').textContent=flood?'Study area locked · adjust flood overlay opacity':'Study area locked · 0% fill shows boundaries';$('#crop-map-note').hidden=flood;$('#field-opacity-label').textContent=flood?'Flood overlay':'Field fill';$('#map-instructions').textContent=flood?'Blue = detected flooding · no field outlines':'Hover to inspect · click to keep a field selected';
+      $('#footprint-area').textContent=fmt(footprintMeta.area_ha.flood,1)+' ha';$('#footprint-clear').textContent=fmt(footprintMeta.area_ha.not_detected,1)+' ha';$('#footprint-unknown').textContent=fmt(footprintMeta.area_ha.unknown,1)+' ha';
+      $('#visible-count').textContent=flood?'All-land flood footprint · native 10 m classification':`${fmt(filtered().length,0)} fields shown`;
+      $('#crop-assumptions-note').textContent=state.view==='impact'?'Damage lookup is from Thailand/Myanmar research. Depth, duration and crop state are assumed; Japanese loss accuracy is unvalidated.':'Paddy land use does not confirm planted or standing rice. Yield and unharvested share are illustrative assumptions. Normal irrigation and crop condition are not measured.';$('#scenario-buttons').hidden=state.view!=='impact';$('#damage-note').hidden=state.view!=='impact';$('#assumptions-title').textContent=state.view==='impact'?'After-flood damage assumptions':'Baseline harvest assumptions';$('#assumptions-description').textContent=state.view==='impact'?'Change the scenario; no observed crop damage is available.':'Assume a yield and standing crop share to explore potential production.';
+      const depth=flood&&state.floodLayer==='depth';$('#flood-layer-label').hidden=!flood;$('#depth-info').hidden=!depth;$('#flood-info').hidden=!flood||depth;$('#depth-legend').hidden=!depth;$('#depth-map-key').hidden=!depth;$('#legend').hidden=depth;
+      if(depth){
+        $('#view-evidence').textContent='OFFICIAL GSI ESTIMATED FLOOD DEPTH · HISTORICAL EVENT';$('#view-title').textContent='Where was the water shallower or deeper?';$('#view-description').textContent='GSI estimates water depth using event information, aerial photography and terrain. The original blue scale shows shallower to deeper water. Grey means depth is unknown, not zero. This is a historical reconstruction, not a forecast.';
+        $('#map-title').textContent='Estimated flood depth';$('#map-instructions').textContent='Official GSI colours · no field outlines · grey = unknown depth';$('#field-opacity-label').textContent='Depth overlay';$('#water-state').textContent='Water depth: GSI estimate';$('#crop-state').textContent='Duration: unavailable';$('#visible-count').textContent='GSI event depth estimate · original published colours';
+        $('.event-date span').textContent='GSI DEPTH ESTIMATE';$('.event-date strong').textContent='13 Oct 2019';$('.event-date small').textContent='Information through 14 Oct · 18:00 JST';
 
-  if (fieldGeojson && !fieldLayer) {
-    renderFieldLayer(fieldGeojson);
-    return;
-  }
+      }
 
-  if (fieldLayer) {
-    fieldLayer.setStyle((feature) => styleForFeature(feature));
-  }
-}
-
-function renderViewButtons(config) {
-  currentViewConfig = config;
-  dom.mapViewSwitcher.innerHTML = "";
-  config.views.forEach((view) => {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = `view-button${view.id === config.default_view ? " is-active" : ""}`;
-    button.textContent = view.label;
-    button.addEventListener("click", () => setActiveView(config, view.id));
-    dom.mapViewSwitcher.appendChild(button);
-  });
-  preloadViewImages(config);
-  setActiveView(config, config.default_view);
-}
-
-function placeMethodologyPanel() {
-  if (dom.sidebar && dom.methodologyPanel && dom.methodologyPanel.parentElement !== dom.sidebar) {
-    dom.sidebar.appendChild(dom.methodologyPanel);
-  }
-}
-
-function preloadViewImages(config) {
-  config.views.forEach((view) => {
-    if (view.id === "yield") return;
-    const imageUrl = view.web_image || view.overlay_image || view.image;
-    if (!imageUrl || preloadedImages.has(imageUrl)) return;
-    const image = new Image();
-    image.src = withAssetVersion(imageUrl);
-    preloadedImages.add(imageUrl);
-  });
-}
-
-function overlayBoundsFromConfig(config) {
-  return L.latLngBounds(
-    L.latLng(config.bounds[1], config.bounds[0]),
-    L.latLng(config.bounds[3], config.bounds[2])
-  );
-}
-
-function getOverlayLayer(config, view) {
-  if (view.id === "yield") return null;
-  const overlayImage = view.web_image || view.overlay_image;
-  if (!overlayImage || !config?.bounds) return null;
-  if (!overlayLayerCache.has(view.id)) {
-    overlayLayerCache.set(
-      view.id,
-      L.imageOverlay(withAssetVersion(overlayImage), overlayBoundsFromConfig(config), {
-        opacity: 0.92,
-        pane: "rasterPane",
-      })
-    );
-  }
-  return overlayLayerCache.get(view.id);
-}
-
-async function setActiveView(config, viewId) {
-  currentViewId = viewId;
-  const selected = config.views.find((view) => view.id === viewId);
-  if (!selected) return;
-  dom.bandPreview.src = withAssetVersion(selected.image);
-  dom.bandPreview.alt = `${selected.label} municipality view`;
-
-  if (currentImageOverlay) {
-    map.removeLayer(currentImageOverlay);
-    currentImageOverlay = null;
-  }
-
-  rasterRequestId += 1;
-  currentImageOverlay = getOverlayLayer(config, selected);
-  if (currentImageOverlay) {
-    currentImageOverlay.addTo(map);
-  }
-
-  addValueLegend(selected);
-  updateFieldLayerVisibility();
-
-  [...dom.mapViewSwitcher.querySelectorAll(".view-button")].forEach((button, index) => {
-    const view = config.views[index];
-    button.classList.toggle("is-active", view.id === viewId);
-  });
-}
-
-function attachGeojson(geojson) {
-  fieldGeojson = geojson;
-  yieldBreaks = buildYieldBreaks(geojson);
-  updateFieldLayerVisibility();
-}
-
-dom.fieldInfoToggle.addEventListener("change", () => {
-  fieldInfoEnabled = dom.fieldInfoToggle.checked;
-  updateFieldLayerVisibility();
-});
-
-async function init() {
-  try {
-    placeMethodologyPanel();
-    const [meta, geojson] = await Promise.all([
-      fetch(metadataUrl).then((response) => response.json()),
-      fetch(geojsonUrl).then((response) => response.json()),
-      fetch(viewConfigUrl).then((response) => response.json()),
-    ]).then(([metaResult, geojsonResult, viewConfig]) => {
-      viewConfig.bounds = viewConfig.overlay_bounds || metaResult.bbox;
-      renderViewButtons(viewConfig);
-      return [metaResult, geojsonResult, viewConfig];
-    });
-
-    populateScene(meta, geojson);
-    clampMapToBbox(currentViewConfig?.bounds || meta.bbox);
-    attachGeojson(geojson);
-  } catch (error) {
-    console.error(error);
-    dom.sceneId.textContent = "Load failed";
-    dom.sceneDate.textContent = "Load failed";
-    dom.sceneCloud.textContent = "Load failed";
-    dom.empty.textContent = "The website could not load the municipality data files.";
-  }
-}
-
-init();
+    }
+    $('#view-select').onchange=e=>{state.view=e.target.value;state.mode=state.view==='before'?'before':state.view==='flood'?'flood':'loss';state.filter='all';$('#status-filter').value='all';$('#status-filter').disabled=state.view==='before';state.limit=12;
+      if(state.view==='flood'){map.removeLayer(group);$('#field-opacity').value=85;if(state.floodLayer==='depth'&&$('#background').value==='radar')$('#background').value='map';}else{[floodFootprint,depthOverlay].forEach(layer=>map.removeLayer(layer));group.addTo(map);$('#field-opacity').value=50;}updateFloodOverlay();
+      $('#opacity-value').textContent=$('#field-opacity').value+'%';refreshFilter();$('#background').onchange();refreshMetrics();};
+    $('#flood-layer').onchange=e=>{state.floodLayer=e.target.value;if(state.floodLayer==='depth'&&$('#background').value==='radar')$('#background').value='map';updateFloodOverlay();$('#background').onchange();refreshMetrics();};
+    $('#adjust-harvest').onclick=()=>{const select=$('#view-select');select.value='impact';select.onchange({target:select});$('#scenario-panel').scrollIntoView({behavior:'smooth',block:'center'});};
+    $('#impact-metric').onchange=e=>{state.impactMetric=e.target.value;refreshMetrics();};
+    $('#status-filter').onchange=e=>{state.filter=e.target.value;state.limit=12;refreshFilter();};let searchTimer;$('#search').oninput=e=>{clearTimeout(searchTimer);searchTimer=setTimeout(()=>{state.search=e.target.value.trim();state.limit=12;refreshFilter();},180);};
+    $('#load-more').onclick=()=>{state.limit+=25;updateTable();};$('#reset-assumptions').onclick=()=>{state.yield=5;state.unharvested=.25;state.scenario=1;$('#harvest').value=25;$('#yield').value=5;$('#scenario-buttons').querySelectorAll('button').forEach(b=>{b.classList.toggle('active',b.dataset.scenario==='1');b.setAttribute('aria-pressed',b.dataset.scenario==='1'?'true':'false');});refreshMetrics();};
+    $('#download-csv').onclick=()=>{const cols=['analysis_view','assumed_standing_potential_t','scenario_remaining_t','remaining_standing_rice_t_per_parcel_ha','reduction_t_per_parcel_ha','field_id','boundary_year','parcel_area_ha','predicted_flood_overlap_percent','predicted_flooded_ha','scenario_loss_tonnes','valid_radar_pixels','status','assumed_depth_cm','assumed_duration_days','assumed_yield_t_ha','assumed_unharvested_fraction'];const rows=filtered().map(p=>[state.view,standing(p),remaining(p)??'',yieldRemaining(p)??'',yieldReduction(p)??'',p.id,p.boundary_year,p.area_ha,p.flood_fraction===null?'':p.flood_fraction*100,p.flooded_area_ha??'',fieldLoss(p)??'',p.valid_pixels,RiceMath.status(p),scenario().depth_cm,scenario().duration_days,state.yield,state.unharvested]);const csv=[cols,...rows].map(row=>row.map(v=>'"'+String(v).replaceAll('"','""')+'"').join(',')).join('\r\n');const url=URL.createObjectURL(new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8'}));const a=document.createElement('a');a.href=url;a.download=`koriyama_${scenario().name}_scenario_fields.csv`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};
+    $('#status-filter').disabled=true;$('#background').onchange();refreshMetrics();$('#visible-count').textContent=`${fmt(fields.length,0)} fields shown`;
+    window.riceDashboard={state,meta,fields,map,selectField:id=>select(id,true),totals:()=>RiceMath.aggregate(fields,state.yield,state.unharvested,scenario().damage_fraction)};
+  }catch(err){console.error(err);$('#error').hidden=false;$('#error').textContent='Dashboard could not finish loading: '+err.message;$('#map-loading')&&($('#map-loading').textContent='Could not load field data. Please refresh.');}
+})();

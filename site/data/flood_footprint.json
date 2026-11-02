@@ -1,0 +1,35 @@
+{
+  "bounds": [
+    [
+      37.347333875000004,
+      140.316467025
+    ],
+    [
+      37.442637125,
+      140.443473975
+    ]
+  ],
+  "source": "Unchanged Japanese Random Forest mask; 13 October 2019 retrospective detection",
+  "source_sha256": "a7b3be61a0c5f6bd6a4b7160cd10304e6f9f76c71415d1f85061e95655fa5ae5",
+  "pixel_counts": {
+    "flood": 460216,
+    "not_detected": 713417,
+    "unknown": 15076
+  },
+  "area_ha": {
+    "flood": 4602.16,
+    "not_detected": 7134.17,
+    "unknown": 150.76
+  },
+  "pixel_area_ha": 0.01,
+  "footprint_dimensions": [
+    1124,
+    1061
+  ],
+  "method": "Area totals count native 10 m UTM pixel centres inside the padded crop-study rectangle. Footprint is nearest-neighbour reprojected to Web Mercator for display. Covers all land, not just paddies.",
+  "limitations": [
+    "Not an independently validated flood boundary; classification errors and permanent water may be present.",
+    "Grey means unknown or outside raster coverage; transparent means no flood detected, not proven dry.",
+    "All-land footprint hectares differ from area-weighted parcel flooded hectares."
+  ]
+}

@@ -1,0 +1,15 @@
+{
+  "checks": "passed",
+  "browser_checks": [
+    "Old four-card stats section absent from DOM",
+    "Farmer summary visible beside map in all three views",
+    "No-flood and after-flood totals use same assessed parcels",
+    "Zero unharvested fraction produces 6348 \u2192 6348 tonnes, 0.0% change",
+    "Unknown-only field filter does not change study-wide summary",
+    "Adjust assumptions button selects view 3",
+    "GSI depth map and legend remain available",
+    "No browser console errors"
+  ],
+  "summary_basis": "Season totals include assumed already-harvested share; field map remains standing-crop-only",
+  "crop_damage_model_unchanged": true
+}

@@ -1,0 +1,17 @@
+{
+  "checks": "passed",
+  "count": 11074,
+  "area": 1270.9207380000005,
+  "floodArea": 519.3281562000016,
+  "loss": 310.7529854661751,
+  "flagged": 7749,
+  "clear": 3187,
+  "unknown": 138,
+  "unknownArea": 1.3396476999999996,
+  "assessedArea": 1269.5810903000001,
+  "before": 6347.905451500001,
+  "after": 6037.1524660338255,
+  "changePercent": -4.895362538721251,
+  "standingBefore": 1586.9763628750002,
+  "standingAfter": 1276.223377408825
+}

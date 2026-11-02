@@ -1,0 +1,29 @@
+{
+  "checks": "passed",
+  "source_tiles": {
+    "404": 112,
+    "200": 44
+  },
+  "data_checks": [
+    "All nontransparent pixels from all 44 downloaded tiles preserved exactly",
+    "Transparent and absent tile positions marked grey/unknown",
+    "Original official legend packaged unchanged",
+    "No numeric depths decoded and no rice model coefficients changed"
+  ],
+  "browser_checks": [
+    "View 2 defaults to GSI depth",
+    "Original depth legend visible on map",
+    "Depth and model-footprint switch removes inactive layer",
+    "Opacity control works",
+    "Field inspector and parcel table hidden in depth view",
+    "Study-area minimum zoom persists",
+    "Impact scenario remains 311 t at defaults",
+    "No browser console errors in final version"
+  ],
+  "limitations": [
+    "Estimated from event information, aerial photographs and terrain; not measurements at every location.",
+    "Unknown/transparent locations are not confirmed dry. Extent can omit flooding or include false inundation.",
+    "Not contemporaneous with the 13 October 05:42 JST SAR acquisition; not guaranteed maximum depth.",
+    "Colour map only: numeric field depths are not decoded, no flood duration, and crop-loss model remains unchanged."
+  ]
+}

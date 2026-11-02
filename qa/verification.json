@@ -1,0 +1,19 @@
+{
+  "checks": "passed",
+  "fields": 11074,
+  "unique_ids": true,
+  "unknown_fields_preserved": 138,
+  "vector_area_and_stats_match": true,
+  "scenario_zero_loss_and_linear_scaling": true,
+  "default_scenario_loss_tonnes": 310.7529854661751,
+  "geometries": "Actual MAFF-derived 2021 polygons; no synthetic field geometry",
+  "browser_checks": [
+    "Real field hover tooltip",
+    "Click-to-pin inspector and zoom",
+    "Harvest slider zero-loss case",
+    "Deep scenario change",
+    "Unknown filter",
+    "Filtered CSV download: 138 rows, null losses blank",
+    "Historical radar background"
+  ]
+}
