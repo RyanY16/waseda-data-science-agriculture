@@ -1,0 +1,21 @@
+{
+  "bounds": [
+    [
+      37.2116210902796,
+      140.3375981248864
+    ],
+    [
+      37.256481854366456,
+      140.4074938693203
+    ]
+  ],
+  "source": "Igarashi & Wakabayashi (2023), Figure 2, digitized approximate labels",
+  "partition": "Southern spatial holdout; latitude < 37.260\u00b0 N; same 2019 event",
+  "tp": 8546,
+  "fp": 640,
+  "fn": 151,
+  "tn": 1898,
+  "pixels": 11235,
+  "iou": 0.9152832815679555,
+  "f1": 0.955768047866689
+}

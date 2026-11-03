@@ -1,6 +1,21 @@
 /* UI copy only; stable data keys and CSV schema stay language-independent. */
 const RiceLanguage = (() => {
   const ja = {
+  "Published flood labels — held-out test area": "論文の浸水ラベル — 未学習のテスト地域",
+  "Published 0/1 labels": "論文の0/1ラベル",
+  "Radar model · same test pixels": "レーダーモデル・同じテスト画素",
+  "Published binary flood labels in the southern test area": "南部テスト地域における論文の浸水ラベル",
+  "Radar model predictions on the same labelled pixels": "同じラベル付き画素でのレーダーモデルの予測",
+  "Blue: flooded (1) · Beige: not flooded (0) · Grey: excluded from scoring": "青：浸水（1）・ベージュ：非浸水（0）・灰色：評価対象外",
+  "Igarashi & Wakabayashi (2023), Figure 2 · Approximate labels · Southern test area": "Igarashi・Wakabayashi（2023）図2・近似ラベル・南部テスト地域",
+  "Held-out locations from the same flood. These scores measure agreement with the published labels and do not validate the dashboard’s flooded-area estimate.": "同じ洪水の未学習地域を対象としています。スコアは論文ラベルとの一致度であり、ダッシュボードの浸水面積の精度を検証したものではありません。",
+  "Crop damage uses the selected depth and duration assumptions. Field boundaries and flood classification are approximate.": "被害は選択した水深と浸水日数の仮定から計算します。区画と浸水判定には誤差があります。",
+  "Compare the same labelled pixels in both maps.": "同じラベル付き画素を2枚の地図で比較します。",
+  "How closely did the model match the published labels?": "モデルは論文のラベルとどのくらい一致した？",
+  "SAME-EVENT SPATIAL HOLDOUT": "同じ洪水・未学習地域での評価",
+  "The model was trained and tuned elsewhere. Both panels use the same southern test pixels.": "学習と調整は別の地域で実施しました。両図は南部の同じテスト画素を表示します。",
+  "Flood IoU: {0}% · Flood F1: {1}% · {2} scored pixels": "浸水IoU：{0}%・浸水F1：{1}%・評価画素数：{2}",
+
   "Rice Flood Observatory · Koriyama": "水稲の浸水・収量ダッシュボード｜郡山",
   "Rice Flood Observatory": "水稲の浸水・収量ダッシュボード",
   "JAPAN · RESEARCH EXPLORER": "日本の水稲・研究用マップ",

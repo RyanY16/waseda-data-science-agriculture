@@ -2,11 +2,11 @@
   'use strict';
   const {t, message, setLanguage, language} = RiceLanguage;
   const $=s=>document.querySelector(s),fmt=(n,d=1)=>n===null||!Number.isFinite(n)?t('Unknown'):n.toLocaleString(language()==='ja'?'ja-JP':'en-US',{minimumFractionDigits:d,maximumFractionDigits:d});
-  const state={scenario:1,yield:5,unharvested:.25,mode:'before',view:'before',floodLayer:'depth',impactMetric:'remaining',filter:'all',search:'',limit:12,pinned:null,hovered:null};
+  const state={scenario:1,yield:5,unharvested:.25,mode:'before',view:'before',floodLayer:'footprint',impactMetric:'remaining',filter:'all',search:'',limit:12,pinned:null,hovered:null};
   const dialog=$('#sources-dialog');$('#sources-open').onclick=$('#sources-bottom').onclick=()=>dialog.showModal();$('#sources-close').onclick=()=>dialog.close();dialog.addEventListener('click',e=>{if(e.target===dialog)dialog.close();});
   try{
-    const responses=await Promise.all([fetch('data/metadata.json'),fetch('data/fields.geojson'),fetch('data/flood_footprint.json'),fetch('data/gsi_depth.json')]);if(responses.some(r=>!r.ok))throw new Error(t('Could not load the field dataset. Please refresh.'));
-    const [meta,geo,footprintMeta,depthMeta]=await Promise.all(responses.map(r=>r.json()));
+    const responses=await Promise.all([fetch('data/metadata.json'),fetch('data/fields.geojson'),fetch('data/flood_footprint.json'),fetch('data/test_comparison.json')]);if(responses.some(r=>!r.ok))throw new Error(t('Could not load the field dataset. Please refresh.'));
+    const [meta,geo,footprintMeta,testMeta]=await Promise.all(responses.map(r=>r.json()));
     const fields=geo.features.map(f=>f.properties),byId=new Map(fields.map(p=>[p.id,p])),layers=new Map();
     const map=L.map('map',{preferCanvas:true,zoomControl:false,minZoom:10,maxZoom:19,maxBoundsViscosity:1,zoomSnap:.25,scrollWheelZoom:true});$('#map-loading')?.remove();L.control.zoom({position:'bottomleft',zoomInTitle:t('Zoom in'),zoomOutTitle:t('Zoom out')}).addTo(map);
     const tiles=L.tileLayer('https://cyberjapandata.gsi.go.jp/xyz/pale/{z}/{x}/{y}.png',{attribution:'<a href="https://maps.gsi.go.jp/development/ichiran.html" target="_blank" rel="noreferrer">GSI</a> · MAFF/AIGID · Copernicus',maxNativeZoom:18,maxZoom:19});
@@ -15,9 +15,8 @@
     const radar=L.imageOverlay('data/radar_post.webp',meta.radar_bounds,{opacity:.88,attribution:'Modified Copernicus Sentinel-1 (2019) / Microsoft Planetary Computer'});
     const preRadar=L.imageOverlay('data/radar_pre.webp',meta.radar_bounds,{opacity:.88,attribution:'Modified Copernicus Sentinel-1 (7 Oct 2019) / Microsoft Planetary Computer'});
     const floodFootprint=L.imageOverlay('data/flood_footprint.png',footprintMeta.bounds,{opacity:.85,interactive:false,attribution:'Flood classification: project Random Forest · Sentinel-1 2019'});
-    const depthOverlay=L.imageOverlay('data/gsi_depth.png',depthMeta.bounds,{opacity:.85,interactive:false,attribution:'Estimated inundation depth: <a href="https://www.gsi.go.jp/BOUSAI/R1.taihuu19gou.html" target="_blank" rel="noreferrer">GSI (2019)</a> · Grey unknown added by project'});
-    function activeFloodLayer(){return state.floodLayer==='depth'?depthOverlay:floodFootprint;}
-    function updateFloodOverlay(){[depthOverlay,floodFootprint].forEach(layer=>map.removeLayer(layer));if(state.view==='flood'){const layer=activeFloodLayer();layer.setOpacity(Number($('#field-opacity').value)/100).addTo(map);layer.bringToFront();}}
+    function activeFloodLayer(){return floodFootprint;}
+    function updateFloodOverlay(){if(state.view!=='flood'||state.floodLayer!=='test'){ $('#map').hidden=false;map.invalidateSize({pan:false}); }[floodFootprint].forEach(layer=>map.removeLayer(layer));if(state.view==='flood'&&state.floodLayer==='footprint'){const layer=activeFloodLayer();layer.setOpacity(Number($('#field-opacity').value)/100).addTo(map);layer.bringToFront();}}
     const renderer=L.canvas({padding:.25,tolerance:3});
     function scenario(){return meta.scenarios[state.scenario];}
     function fieldLoss(p){return RiceMath.loss(p,state.yield,state.unharvested,scenario().damage_fraction);}
@@ -56,7 +55,7 @@
     function constrainStudyView(){map.setMinZoom(map.getBoundsZoom(studyBounds,true));map.panInsideBounds(studyBounds,{animate:false});}
     map.setView(studyBounds.getCenter(),map.getBoundsZoom(studyBounds,true),{animate:false});constrainStudyView();map.on('resize',constrainStudyView);
     $('#fit-map').onclick=()=>map.setView(studyBounds.getCenter(),map.getMinZoom(),{animate:false});
-    $('#background').onchange=()=>{[tiles,aerial,radar,preRadar].forEach(layer=>map.removeLayer(layer));const chosen=$('#background').value;const layer=chosen==='radar'?(state.view==='before'?preRadar:radar):chosen==='aerial'?aerial:tiles;layer.addTo(map);layer.bringToBack();$('#alignment-note').textContent=chosen==='aerial'?t('GSI aerial mosaic: capture dates vary; not an October 2019 flood image. Compare parcel edges with the photograph using field opacity.'):chosen==='radar'?message("VV radar ({0}): brightness is backscatter, not water depth. 10 m samples cannot resolve every field edge.",t(state.view==='before'?'7 Oct 2019':'13 Oct 2019')):t('GSI cartographic map: roads and land-use symbols are schematic. Use aerial imagery to inspect field edges.');group.setStyle(style);if(state.view==='flood'){activeFloodLayer().bringToFront();if(state.floodLayer==='depth')$('#alignment-note').textContent=t('Background map is context only. Depth colours are the official 2019 event estimate; grey means depth is unknown. Zooming in does not add source detail.');}};
+    $('#background').onchange=()=>{[tiles,aerial,radar,preRadar].forEach(layer=>map.removeLayer(layer));const chosen=$('#background').value;const layer=chosen==='radar'?(state.view==='before'?preRadar:radar):chosen==='aerial'?aerial:tiles;layer.addTo(map);layer.bringToBack();$('#alignment-note').textContent=chosen==='aerial'?t('GSI aerial mosaic: capture dates vary; not an October 2019 flood image. Compare parcel edges with the photograph using field opacity.'):chosen==='radar'?message("VV radar ({0}): brightness is backscatter, not water depth. 10 m samples cannot resolve every field edge.",t(state.view==='before'?'7 Oct 2019':'13 Oct 2019')):t('GSI cartographic map: roads and land-use symbols are schematic. Use aerial imagery to inspect field edges.');group.setStyle(style);if(state.view==='flood'){activeFloodLayer().bringToFront();}};
     $('#field-opacity').oninput=e=>{$('#opacity-value').textContent=e.target.value+'%';if(state.view==='flood')activeFloodLayer().setOpacity(Number(e.target.value)/100);else group.setStyle(style);};
     function included(p){return(state.filter==='all'||RiceMath.status(p)===state.filter)&&(!state.search||p.id.includes(state.search));}
     function filtered(){return fields.filter(included);}
@@ -96,19 +95,27 @@
       $('#footprint-area').textContent=fmt(footprintMeta.area_ha.flood,1)+' ha';$('#footprint-clear').textContent=fmt(footprintMeta.area_ha.not_detected,1)+' ha';$('#footprint-unknown').textContent=fmt(footprintMeta.area_ha.unknown,1)+' ha';
       $('#visible-count').textContent=flood?t('All-land flood footprint · native 10 m classification'):message("{0} fields shown", fmt(filtered().length,0));
       $('#crop-assumptions-note').textContent=state.view==='impact'?t('Damage lookup is from Thailand/Myanmar research. Depth, duration and crop state are assumed; Japanese loss accuracy is unvalidated.'):t('Paddy land use does not confirm planted or standing rice. Yield and unharvested share are illustrative assumptions. Normal irrigation and crop condition are not measured.');$('#scenario-buttons').hidden=state.view!=='impact';$('#damage-note').hidden=state.view!=='impact';$('#assumptions-title').textContent=state.view==='impact'?t('After-flood damage assumptions'):t('Baseline harvest assumptions');$('#assumptions-description').textContent=state.view==='impact'?t('Change the scenario; no observed crop damage is available.'):t('Assume a yield and standing crop share to explore potential production.');
-      const depth=flood&&state.floodLayer==='depth';$('#flood-layer-label').hidden=!flood;$('#depth-info').hidden=!depth;$('#flood-info').hidden=!flood||depth;$('#depth-legend').hidden=!depth;$('#depth-map-key').hidden=!depth;$('#legend').hidden=depth;
-      if(depth){
-        $('#view-evidence').textContent=t('OFFICIAL GSI ESTIMATED FLOOD DEPTH · HISTORICAL EVENT');$('#view-title').textContent=t('Where was the water shallower or deeper?');$('#view-description').textContent=t('GSI estimates water depth using event information, aerial photography and terrain. The original blue scale shows shallower to deeper water. Grey means depth is unknown, not zero. This is a historical reconstruction, not a forecast.');
-        $('#map-title').textContent=t('Estimated flood depth');$('#map-instructions').textContent=t('Official GSI colours · no field outlines · grey = unknown depth');$('#field-opacity-label').textContent=t('Depth overlay');$('#water-state').textContent=t('Water depth: GSI estimate');$('#crop-state').textContent=t('Duration: unavailable');$('#visible-count').textContent=t('GSI event depth estimate · original published colours');
-        $('.event-date span').textContent=t('GSI DEPTH ESTIMATE');$('.event-date strong').textContent=t('13 Oct 2019');$('.event-date small').textContent=t('Information through 14 Oct · 18:00 JST');
-
+      const testing=flood&&state.floodLayer==='test';
+      $('#flood-layer-label').hidden=!flood;
+      $('#test-comparison').hidden=!testing;
+      $('#flood-info').hidden=!flood||testing;
+      for(const selector of ['#map','#background','#fit-map','.alignment-controls','.map-footer','#alignment-note']){
+        $(selector).hidden=testing;
       }
-
+      if(!testing) map.invalidateSize({pan:false});
+      if(testing){
+        $('#map-title').textContent=t('Published flood labels — held-out test area');
+        $('#map-instructions').textContent=t('Compare the same labelled pixels in both maps.');
+        $('#view-title').textContent=t('How closely did the model match the published labels?');
+        $('#view-evidence').textContent=t('SAME-EVENT SPATIAL HOLDOUT');
+        $('#view-description').textContent=t('The model was trained and tuned elsewhere. Both panels use the same southern test pixels.');
+        $('#test-scores').textContent=message('Flood IoU: {0}% · Flood F1: {1}% · {2} scored pixels',fmt(testMeta.iou*100,1),fmt(testMeta.f1*100,1),fmt(testMeta.pixels,0));
+      }
     }
     $('#view-select').onchange=e=>{state.view=e.target.value;state.mode=state.view==='before'?'before':state.view==='flood'?'flood':'loss';state.filter='all';$('#status-filter').value='all';$('#status-filter').disabled=state.view==='before';state.limit=12;
-      if(state.view==='flood'){map.removeLayer(group);$('#field-opacity').value=85;if(state.floodLayer==='depth'&&$('#background').value==='radar')$('#background').value='map';}else{[floodFootprint,depthOverlay].forEach(layer=>map.removeLayer(layer));group.addTo(map);$('#field-opacity').value=50;}updateFloodOverlay();
+      if(state.view==='flood'){map.removeLayer(group);$('#field-opacity').value=85;}else{[floodFootprint].forEach(layer=>map.removeLayer(layer));group.addTo(map);$('#field-opacity').value=50;}updateFloodOverlay();
       $('#opacity-value').textContent=$('#field-opacity').value+'%';refreshFilter();$('#background').onchange();refreshMetrics();};
-    $('#flood-layer').onchange=e=>{state.floodLayer=e.target.value;if(state.floodLayer==='depth'&&$('#background').value==='radar')$('#background').value='map';updateFloodOverlay();$('#background').onchange();refreshMetrics();};
+    $('#flood-layer').onchange=e=>{state.floodLayer=e.target.value;updateFloodOverlay();$('#background').onchange();refreshMetrics();};
     $('#adjust-harvest').onclick=()=>{const select=$('#view-select');select.value='impact';select.onchange({target:select});$('#scenario-panel').scrollIntoView({behavior:'smooth',block:'center'});};
     $('#impact-metric').onchange=e=>{state.impactMetric=e.target.value;refreshMetrics();};
     $('#status-filter').onchange=e=>{state.filter=e.target.value;state.limit=12;refreshFilter();};let searchTimer;$('#search').oninput=e=>{clearTimeout(searchTimer);searchTimer=setTimeout(()=>{state.search=e.target.value.trim();state.limit=12;refreshFilter();},180);};

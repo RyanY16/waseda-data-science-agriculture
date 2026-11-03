@@ -24,7 +24,7 @@ Japanese is the default. Use the language menu in the header to switch to Englis
 The dropdown directly above the map selects:
 
 1. **Before the flood:** actual Sentinel-1 VV imagery from 7 October 2019, mapped paddy parcels and assumed standing-harvest potential. It does not establish that a field was dry or had rice planted.
-2. **Flood-affected area:** official GSI estimated inundation depth, with the original 0–6.5+ metre legend and grey unknown areas. A second dropdown switches to the unchanged project Random Forest flood footprint across all land. No parcel outlines are shown in this view.
+2. **Flood-affected area:** the dashboard opens with the radar footprint. The layer menu opens a side-by-side comparison with approximate 0/1 labels digitized from Igarashi & Wakabayashi (2023), Figure 2, in the southern holdout. Both panels use the same 11,235 test pixels; grey means excluded from scoring. Flood IoU is 91.5% and F1 is 95.6%. This is a same-event comparison, not independent flood validation.
 3. **Rice production after flood:** scenario standing rice remaining, reduction per hectare or tonnes lost. Click a field to compare before/after standing production. These are scenarios, not measured harvest outcomes.
 
 Panning and zoom-out stay inside the mapped paddy study region. Source parcel boundaries have a confirmed local mismatch against aerial imagery; no alignment correction is claimed.
@@ -54,7 +54,7 @@ After-damage season t = no-flood season t − loss t
 Change % = −100 × loss t / no-flood season t
 ```
 
-Flooded area does not mean the crop was destroyed. GSI depth colours have not been decoded into numeric field depths and do not feed the crop-loss calculation. Depth, duration, crop presence, growth stage, yield and harvest status remain assumptions for that calculation. No crop quality or price loss is calculated. Physical mass uses an illustrative paddy/rough-rice basis.
+Flooded area does not mean the crop was destroyed. The GSI reference layer is retained in the repository for analysis and does not feed the crop-loss calculation. Depth, duration, crop presence, growth stage, yield and harvest status remain assumptions for that calculation. No crop quality or price loss is calculated. Physical mass uses an illustrative paddy/rough-rice basis.
 
 ## Evidence and limitations
 
@@ -77,3 +77,9 @@ Flooded area does not mean the crop was destroyed. GSI depth colours have not be
 ## Data regeneration
 
 The dashboard runs with its bundled derived data. Exact original preparation scripts are retained in `scripts/dashboard_preparation/`; they require the original workspace layout and raw inputs, so they are provenance scripts rather than a standalone end-to-end reproduction package. Inputs include the CP932 MAFF/AIGID shapefile, aligned pre/post radar TIFFs, frozen RF mask TIFF and damage lookup CSV. Original Python environment: numpy 2.2.5, rasterio 1.4.3, pyshp 2.3.1, Pillow 11.2.1, requests 2.32.3. The repository's older `requirements.txt` belongs to the separate Shibata extraction prototype.
+
+## Reference-map agreement
+
+Across mapped paddies, the radar footprint and GSI mapped inundation overlap by about 28% IoU. Radar flagged 93% of the GSI-mapped flooded paddy area, but only 29% of radar-flagged paddy area overlaps GSI. These describe map agreement; areas GSI did not map are not confirmed dry. The published-label comparison uses a different, restricted set of pixels, so its 91.5% IoU cannot validate the full dashboard footprint.
+
+Regenerate the comparison with `scripts/prepare-test-comparison.py` using the original weak-label TIFF, geographic-partition TIFF and frozen dashboard prediction TIFF. Scores are calculated on the native grid before projection for display.
