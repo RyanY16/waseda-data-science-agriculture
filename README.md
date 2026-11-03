@@ -17,6 +17,8 @@ npm run build
 
 The build copies `site/` into generated `public/`. The existing `vercel.json` deploys that directory at the website root. The root webpage is the current dashboard; research outputs are not copied into the deployment.
 
+Japanese is the default. Use the language menu in the header to switch to English; the choice is saved in your browser.
+
 ## Three map views
 
 The dropdown directly above the map selects:
